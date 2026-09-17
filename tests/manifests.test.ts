@@ -246,3 +246,30 @@ test("cross-rendition: a break at the very edge of the shared window is not call
     "window skew between renditions must not read as a missing break",
   );
 });
+
+test("cross-rendition: a break closing earlier in audio than video is not a count mismatch", () => {
+  // Audio segments are shorter, so the audio rendition reaches the return
+  // first and the newest break is closed there while still open in video.
+  const build = (closed: boolean, segDur: number) => {
+    const lines = [
+      "#EXTM3U",
+      "#EXT-X-VERSION:6",
+      "#EXT-X-TARGETDURATION:6",
+      "#EXT-X-PROGRAM-DATE-TIME:2026-09-17T10:00:00.000Z",
+    ];
+    for (let i = 0; i < 20; i++) lines.push(`#EXTINF:${segDur.toFixed(3)},`, `prog_${i}.ts`);
+    lines.push("#EXT-X-CUE-OUT:12.0", "#EXT-X-DISCONTINUITY");
+    for (let i = 0; i < 2; i++) lines.push(`#EXTINF:${segDur.toFixed(3)},`, `ad_${i}.ts`);
+    if (closed) lines.push("#EXT-X-CUE-IN", "#EXT-X-DISCONTINUITY", "#EXTINF:6.000,", "tail.ts");
+    return lines.join("\n");
+  };
+  const video = analyzeText(build(false, 6), "video").renditions[0];
+  const audio = analyzeText(build(true, 6), "audio").renditions[0];
+  video.label = "video";
+  audio.label = "audio";
+  const cross = analyzeCrossVariant([video, audio]);
+  assert.ok(
+    !cross.some((f) => f.code === "VARIANT_BREAK_COUNT_MISMATCH"),
+    "a break straddling the live edge must not count as a signalling difference",
+  );
+});

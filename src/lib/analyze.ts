@@ -711,10 +711,16 @@ export function analyzeCrossVariant(rends: RenditionAnalysis[]): Finding[] {
     .map((r) => r.playlist?.targetDuration)
     .filter((t): t is number => t !== undefined);
   const grace = Math.max(10_000, (targetDurations.length ? Math.max(...targetDurations) : 6) * 2000);
-  const inOverlap = (b: AdBreak) =>
-    !haveWindows ||
-    b.pdt === undefined ||
-    (b.pdt >= overlapStart + grace && b.pdt <= overlapEnd);
+  const inOverlap = (b: AdBreak) => {
+    if (!haveWindows || b.pdt === undefined) return true;
+    // The same reasoning applies at the live edge. Audio segments are shorter
+    // than video ones and reach a return sooner, so the newest break is
+    // routinely closed in an audio rendition while still open in the video
+    // ones — which changes the comparable count without any signalling being
+    // wrong. Hold back from both boundaries.
+    const extent = (b.actualDuration ?? b.signalledDuration ?? 0) * 1000;
+    return b.pdt >= overlapStart + grace && b.pdt + extent <= overlapEnd - grace;
+  };
 
   // Only breaks that are wholly inside the shared window can be compared: one
   // clipped by the start of a rendition's DVR window, or still open at the live
