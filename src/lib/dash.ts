@@ -38,6 +38,8 @@ export interface DashAdaptationSet {
   mediaDuration: number;
   segmentCount: number;
   representations: DashRepresentation[];
+  /** SegmentTemplate@media, which points at where the media actually lives */
+  mediaTemplate?: string;
   supplementalProperties: string[];
   essentialProperties: string[];
 }
@@ -185,6 +187,7 @@ function parseSegmentTiming(as: Record<string, unknown>): {
   first?: number;
   duration: number;
   count: number;
+  media?: string;
 } {
   const tpl = (child(as, "SegmentTemplate") ?? child(as, "SegmentList")) as
     | Record<string, unknown>
@@ -192,6 +195,7 @@ function parseSegmentTiming(as: Record<string, unknown>): {
   if (!tpl) return { timescale: 1, pto: 0, duration: 0, count: 0 };
   const timescale = num(pick(tpl, "timescale")) ?? 1;
   const pto = num(pick(tpl, "presentationTimeOffset")) ?? 0;
+  const media = pick(tpl, "media") !== undefined ? String(pick(tpl, "media")) : undefined;
 
   const timeline = child(tpl, "SegmentTimeline") as Record<string, unknown> | undefined;
   if (timeline) {
@@ -211,15 +215,15 @@ function parseSegmentTiming(as: Record<string, unknown>): {
       count += reps;
       if (cursor !== undefined) cursor += d * reps;
     }
-    return { timescale, pto, first, duration: total / timescale, count };
+    return { timescale, pto, first, duration: total / timescale, count, media };
   }
 
   // SegmentTemplate with @duration and no timeline.
   const d = num(pick(tpl, "duration"));
   if (d !== undefined) {
-    return { timescale, pto, first: pto, duration: 0, count: 0 };
+    return { timescale, pto, first: pto, duration: 0, count: 0, media };
   }
-  return { timescale, pto, duration: 0, count: 0 };
+  return { timescale, pto, duration: 0, count: 0, media };
 }
 
 export function parseMpd(text: string, uri: string): MpdDocument {
@@ -269,6 +273,7 @@ export function parseMpd(text: string, uri: string): MpdDocument {
         mediaDuration: timing.duration,
         segmentCount: timing.count,
         representations: reps,
+        mediaTemplate: timing.media,
         supplementalProperties: schemeList(as, "SupplementalProperty"),
         essentialProperties: schemeList(as, "EssentialProperty"),
       };

@@ -17,6 +17,35 @@ export interface Sample {
   entry: string;
   capturedAt: string;
   liveUrl?: string;
+  /** synthetic fixtures, clearly marked as such */
+  synthetic?: boolean;
+}
+
+/** A source feed paired with the stitched output produced from it. */
+export interface PipelinePair {
+  id: string;
+  label: string;
+  note: string;
+  sourceId: string;
+  stitchedId: string;
+  sourceLabel: string;
+  stitchedLabel: string;
+}
+
+export const PIPELINE_PAIRS: PipelinePair[] = [
+  {
+    id: "ssai-demo",
+    label: "Packager feed vs SSAI output",
+    note: "Four signalled avails: one filled correctly, one under-filled, one opened but never substituted, one missing entirely",
+    sourceId: "ssai-source",
+    stitchedId: "ssai-output",
+    sourceLabel: "packager feed",
+    stitchedLabel: "SSAI output",
+  },
+];
+
+export function getPipelinePair(id: string): PipelinePair | undefined {
+  return PIPELINE_PAIRS.find((p) => p.id === id);
 }
 
 export const SAMPLES: Sample[] = [
@@ -28,6 +57,22 @@ export const SAMPLES: Sample[] = [
     capturedAt: "2026-09-17",
     liveUrl:
       "https://origin-irp-telus-avprod-a-01.vos360.video/Content/DASH_DASH/Live/channel(232006004130)/manifest.mpd",
+  },
+  {
+    id: "ssai-source",
+    label: "Packager feed (pre-insertion)",
+    note: "Signalling-only feed with four 30s avails",
+    entry: "playlist.m3u8",
+    capturedAt: "synthetic",
+    synthetic: true,
+  },
+  {
+    id: "ssai-output",
+    label: "SSAI output (post-insertion)",
+    note: "The stitched result, with one avail filled, one short, one passed through and one missing",
+    entry: "playlist.m3u8",
+    capturedAt: "synthetic",
+    synthetic: true,
   },
   {
     id: "unified-hls",

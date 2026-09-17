@@ -436,6 +436,9 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
             : undefined,
         actualDuration: actual,
         segmentCount: s.period.adaptationSets.find((a) => a.mimeType?.startsWith("video"))?.segmentCount ?? 0,
+        mediaUris: s.period.adaptationSets
+          .map((a) => a.mediaTemplate)
+          .filter((m): m is string => !!m),
         closed: !!end,
         inProgress: !end && live && isLast,
         outLine: 0,
@@ -535,10 +538,15 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
     : 0;
   const adSeconds = adDurations.reduce((a, b) => a + b, 0);
 
+  const adPeriodIndexes = new Set(summaries.filter((x) => x.isAd).map((x) => x.index));
   return {
     label,
     uri: mpd.uri,
     protocol: "dash",
+    contentMediaUris: periods
+      .filter((p) => !adPeriodIndexes.has(p.index))
+      .flatMap((p) => p.adaptationSets.map((a) => a.mediaTemplate))
+      .filter((m): m is string => !!m),
     periods: summaries,
     breaks,
     findings,
@@ -553,6 +561,15 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
       adSeconds,
       adPercent: windowDuration > 0 ? (adSeconds / windowDuration) * 100 : 0,
       hasPdt: mpd.availabilityStartTime !== undefined,
+      windowStartPdt:
+        mpd.availabilityStartTime !== undefined && periods.length
+          ? mpd.availabilityStartTime + periods[0].mediaStart * 1000
+          : undefined,
+      windowEndPdt:
+        mpd.availabilityStartTime !== undefined && periods.length
+          ? mpd.availabilityStartTime +
+            (periods[periods.length - 1].start + periods[periods.length - 1].mediaDuration) * 1000
+          : undefined,
       live,
       lowLatency: (mpd.suggestedPresentationDelay ?? 99) < 5,
     },

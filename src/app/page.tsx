@@ -378,9 +378,14 @@ export default function Home() {
           duration disagreements, missing discontinuities, and renditions that do not splice at the same point.
         </p>
         </div>
-        <a href="/monitors" className="shrink-0 text-sm text-accent hover:underline">
-          continuous monitors →
-        </a>
+        <div className="flex shrink-0 flex-col gap-1 text-sm">
+          <a href="/compare" className="text-accent hover:underline">
+            pipeline comparison →
+          </a>
+          <a href="/monitors" className="text-accent hover:underline">
+            continuous monitors →
+          </a>
+        </div>
       </header>
 
       <section className="rounded-xl border border-edge bg-panel p-4">

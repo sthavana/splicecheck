@@ -42,6 +42,8 @@ export interface AdBreak {
   index: number;
   /** DASH: the Period this break begins in */
   periodId?: string;
+  /** media inside the avail — HLS segment URIs, or DASH media templates */
+  mediaUris?: string[];
   /** seconds into the playlist window */
   startTime: number;
   pdt?: number;
@@ -94,6 +96,8 @@ export interface RenditionAnalysis {
   label: string;
   uri: string;
   protocol: "hls" | "dash";
+  /** media outside any avail, for comparison against what sits inside one */
+  contentMediaUris?: string[];
   variant?: Variant;
   /** HLS only */
   playlist?: MediaPlaylist;
@@ -111,6 +115,9 @@ export interface RenditionAnalysis {
     hasPdt: boolean;
     live: boolean;
     lowLatency: boolean;
+    /** wall-clock extent of the media in this window, epoch ms */
+    windowStartPdt?: number;
+    windowEndPdt?: number;
   };
 }
 
@@ -296,6 +303,26 @@ export function analyzeRendition(
     }
   }
 
+  // A DATERANGE announces its own start time. When that disagrees with the
+  // position the tag actually occupies, downstream systems that schedule from
+  // the attribute and players that schedule from the playlist position act on
+  // different instants.
+  for (const m of playlist.markers) {
+    if (m.kind !== "DATERANGE" || m.pdt === undefined) continue;
+    const declared = Date.parse(m.attrs["START-DATE"] ?? "");
+    if (Number.isNaN(declared)) continue;
+    const drift = (declared - m.pdt) / 1000;
+    if (Math.abs(drift) > EPS) {
+      add(
+        "warning",
+        "DATERANGE_START_DATE_MISMATCH",
+        `EXT-X-DATERANGE "${m.id ?? "?"}" declares a start ${fmt(Math.abs(drift))}s ${drift > 0 ? "after" : "before"} where it sits`,
+        `START-DATE is ${m.attrs["START-DATE"]} but the tag precedes a segment whose program date-time is ${new Date(m.pdt).toISOString()}. Ad decisioning that schedules from START-DATE and players that schedule from the playlist position will disagree by ${fmt(Math.abs(drift))}s, so the break fires at two different instants depending on which system you ask.`,
+        { lineNumber: m.lineNumber, atTime: m.startTime },
+      );
+    }
+  }
+
   // ---- pair markers into breaks -----------------------------------------
   const ordered = [...playlist.markers].sort((a, b) => a.lineNumber - b.lineNumber);
   let open: { marker: HlsMarker; sig?: DecodedSignal } | null = null;
@@ -356,6 +383,7 @@ export function analyzeRendition(
       closed: !!inMarker,
       inProgress,
       windowClipped: clipped,
+      mediaUris: inside.map((x) => x.uri),
       outLine: outM.lineNumber,
       inLine: inMarker?.lineNumber,
       outTag: outM.raw,
@@ -581,10 +609,12 @@ export function analyzeRendition(
 
   const adSeconds = breaks.reduce((a, b) => a + (b.actualDuration ?? b.signalledDuration ?? 0), 0);
 
+  const inAvail = new Set(breaks.flatMap((b) => b.mediaUris ?? []));
   return {
     label,
     uri: playlist.uri,
     protocol: "hls",
+    contentMediaUris: segs.map((x) => x.uri).filter((u) => !inAvail.has(u)),
     variant,
     playlist,
     breaks,
@@ -599,6 +629,11 @@ export function analyzeRendition(
       hasPdt,
       live,
       lowLatency: playlist.lowLatency,
+      windowStartPdt: segs[0]?.pdt,
+      windowEndPdt:
+        segs.length && segs[segs.length - 1].pdt !== undefined
+          ? segs[segs.length - 1].pdt! + segs[segs.length - 1].duration * 1000
+          : undefined,
     },
   };
 }

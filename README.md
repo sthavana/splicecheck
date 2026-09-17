@@ -5,8 +5,13 @@ reconstructs every ad break, decodes the SCTE-35 riding with it, and reports the
 conditions that make server-side ad insertion mis-fire. Then it watches the
 stream and tells you when that changes.
 
-Two parts: the **inspector** (`/`) for a one-off look, and the **monitor**
-(`/monitors`), which polls on an interval and alerts on transitions.
+Three parts:
+
+- **Inspector** (`/`) — a one-off look at any stream
+- **Pipeline comparison** (`/compare`) — the feed going *into* an ad-insertion
+  service against the stitched output coming *out* of it, to see which avails
+  were actually filled
+- **Monitor** (`/monitors`) — polls on an interval and alerts on transitions
 
 ---
 
@@ -23,6 +28,46 @@ the tool demonstrates itself whether or not those origins are still up:
 ```bash
 npm install && npm run dev      # then click a "recorded" sample
 ```
+
+## Did the ad service do its job?
+
+The question operations teams actually argue about. The encoder team says the
+SCTE-35 was correct; the ad-tech team says the break never arrived. Both are
+looking at different streams, and nothing puts the two side by side.
+
+Give it the packager feed and the SSAI output and it matches avails on wall
+clock, then reports what happened to each one:
+
+| Status | What it means |
+| --- | --- |
+| `filled` | Substituted media covers the avail |
+| `under-filled` | Short of the signalled duration — slate, black, or an early return. Directly measurable as unfilled inventory. |
+| `over-filled` | Runs past the break, so content after it is cut |
+| `passthrough` | **The break exists and nothing was substituted into it.** The manifest is well-formed, the player is happy, and no ad was delivered. This is the failure that looks healthy from every angle except revenue. |
+| `not-stitched` | Signalled upstream, absent from the output entirely |
+| `unsignalled` | In the output with nothing upstream asking for it |
+
+The headline number is **fill rate**: the proportion of signalled avail seconds
+the output actually fills. The worked example (`/compare` → "Run the worked
+example") shows 40% across four avails — one filled, one 12s short, one passed
+through, one never stitched.
+
+Because matching is on wall clock — `EXT-X-PROGRAM-DATE-TIME` in HLS,
+`availabilityStartTime` plus period start in DASH — the two sides do not have to
+be the same protocol. A DASH packager feeding an HLS output compares fine.
+
+Two judgement calls worth naming:
+
+- **Substitution is inferred, and labelled as inference.** Media paths inside
+  the avail are compared for shape against the output's *own* surrounding
+  content, so `ads/creative-8821/seg_0003.ts` reads as substituted while a
+  continuation of `content/prog_1016.ts` does not. That is evidence, not proof,
+  and the UI says so.
+- **The comparison window comes from the media extent, not from where the
+  breaks are.** If it came from the breaks, an avail missing from the end of the
+  output would shrink the window until it excluded itself — and the failure this
+  whole feature exists to catch would silently disappear. There is a test for
+  exactly that.
 
 ## What it found on real streams
 
@@ -98,6 +143,7 @@ durations, and CRC-32 validation. Accepts base64 or hex.
 | `SIGNAL_DURATION_DISAGREEMENT` | Manifest duration ≠ SCTE-35 duration; players and SSAI honour different ones |
 | `NO_DISCONTINUITY_AT_BREAK_START/END` | Splice point unmarked in a stitched stream — freezes on the return |
 | `DATERANGE_DUPLICATE_ID` / `EVENT_ID_REUSED` | Players and ad platforms deduplicate on these and discard the later ones |
+| `DATERANGE_START_DATE_MISMATCH` | A DATERANGE's START-DATE disagrees with where it sits, so schedulers and players fire the break at different instants |
 | `TARGETDURATION_EXCEEDED` / `PDT_DISCONTINUITY` | RFC 8216 violations and an inconsistent timeline |
 
 **Cross-rendition (HLS)** — the rules that explain "it only fails on some
@@ -144,7 +190,7 @@ on pre-existing faults — otherwise adding a stream floods you.
 ## Testing
 
 ```bash
-npm test      # 21 tests
+npm test      # 26 tests
 ```
 
 - **Spec vectors** — the SCTE-35 decoder is asserted against published ANSI/SCTE
@@ -157,6 +203,10 @@ npm test      # 21 tests
   comparison stays *silent* on a stream whose renditions do agree.
 - **Alert transitions** — including the case that matters most: a steady,
   unchanged stream must produce no alerts at all.
+- **Pipeline comparison** — every SSAI outcome is asserted against a worked
+  source/output pair, and a correctly stitched stream must produce *no findings
+  whatsoever*. A tool that cannot stay silent on a healthy pipeline is useless
+  on an unhealthy one.
 
 ## Architecture
 
@@ -167,6 +217,7 @@ src/lib/dash.ts        MPD parser — multi-period, EventStream, SegmentTimeline
 src/lib/analyze.ts     HLS break reconstruction + rules + cross-rendition
 src/lib/analyzeDash.ts DASH period analysis + rules
 src/lib/runner.ts      one analysis path, with the fetcher injected
+src/lib/pipeline.ts    source vs stitched-output comparison
 src/lib/monitor.ts     polling, transition diffing, alert delivery
 src/lib/store.ts       SQLite state
 ```
@@ -184,8 +235,10 @@ would need a hosted database and a cron route instead.
 
 - Inband `emsg` events (DASH) and HLS interstitials
   (`EXT-X-DATERANGE` with `CLASS="com.apple.hls.interstitial"`)
-- Comparing pre-stitch signalling against post-stitch output — the check that
-  proves the SSAI service actually did its job
+- Per-creative breakdown inside a filled avail — which creatives ran, and
+  whether the pod was assembled as the ad server intended
+- Running the pipeline comparison continuously, so fill rate becomes a tracked
+  metric rather than a spot check
 - Real signal lead time, which requires the monitor to record when a signal
   first appeared relative to its splice point rather than inferring it from a
   single poll
