@@ -73,6 +73,8 @@ export interface AdBreak {
   edgeDistance?: number;
   /** the playlist window begins inside this break, so its extent is unknown */
   windowClipped?: boolean;
+  /** what establishes the end of this avail: an end event, or a declared duration */
+  boundedBy?: string;
 }
 
 export interface PeriodSummary {

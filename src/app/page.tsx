@@ -69,9 +69,15 @@ function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
 
 const SAMPLES: { id?: string; label: string; url?: string; note: string; recorded?: boolean }[] = [
   {
-    id: "telus-dash",
+    id: "multiperiod-dash",
     label: "Multi-period DASH",
-    note: "Recorded from a live linear DASH service — each avail is its own Period",
+    note: "Live multi-period DASH — each avail is its own Period, with paired SCTE-35 start and end descriptors",
+    recorded: true,
+  },
+  {
+    id: "unified-dash",
+    label: "DASH EventStream",
+    note: "Live DASH carrying avails as Events with an explicit duration instead of as Periods",
     recorded: true,
   },
   {

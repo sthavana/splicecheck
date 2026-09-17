@@ -21,48 +21,54 @@ test("every declared sample has its bundle on disk", async () => {
   }
 });
 
-test("recorded multi-period DASH: periods, breaks and the continuity finding", async () => {
-  const r = await analyzeSample("telus-dash");
+test("multi-period DASH: periods, paired avails, and the continuity finding", async () => {
+  const r = await analyzeSample("multiperiod-dash");
   const mpd = r.renditions[0];
 
   assert.equal(mpd.protocol, "dash");
-  assert.equal(r.summary.errors, 0, "this is a well-formed service; errors here mean a false positive");
-  assert.ok(mpd.periods!.length >= 20, "multi-period capture");
-  assert.ok(mpd.breaks.length >= 20, "each avail is signalled");
+  assert.equal(r.summary.errors, 0, "this manifest is well-formed; errors here mean a false positive");
+  assert.equal(mpd.periods!.length, 13);
+  assert.equal(mpd.breaks.length, 9);
 
-  // Ad breaks pair start to end by segmentation event id.
-  const closed = mpd.breaks.filter((b) => b.closed);
-  assert.ok(closed.length >= 20);
-  for (const b of closed) {
-    assert.ok(b.eventId !== undefined, "every break carries a segmentation event id");
+  // Each avail is opened by a 0x30 descriptor and closed by the 0x31 that
+  // carries the same segmentation_event_id.
+  for (const b of mpd.breaks) {
+    assert.equal(b.segmentationTypeId, 0x30, "Provider Advertisement Start");
+    assert.ok(b.closed, `break ${b.index} should be closed by its end descriptor`);
+    assert.equal(b.boundedBy, "end event");
+    assert.ok(
+      Math.abs(b.actualDuration! - b.signalledDuration!) < 0.01,
+      `break ${b.index} should land on its signalled duration`,
+    );
   }
-
-  // In this capture every avail overruns its signalled duration by a uniform
-  // 15ms or 30ms — quantisation, not a fault — except exactly one, which runs
-  // 128ms short. That outlier is the interesting part and must stay reported:
-  // it is ~4 frames of the last creative in the pod being cut.
-  const drift = (b: (typeof closed)[number]) => b.actualDuration! - b.signalledDuration!;
-  const outliers = closed.filter((b) => Math.abs(drift(b)) > 0.05);
-  assert.equal(outliers.length, 1, "one avail in this capture genuinely runs short");
-  assert.ok(drift(outliers[0]) < 0, "it underruns rather than overruns");
-  assert.ok(Math.abs(drift(outliers[0]) + 0.1285) < 0.005, "by about 128ms");
-  for (const b of closed.filter((x) => !outliers.includes(x))) {
-    assert.ok(Math.abs(drift(b)) <= 0.05, `break ${b.index} drifted unexpectedly`);
-  }
-  assert.ok(
-    mpd.findings.some((f) => f.code === "BREAK_UNDERRUN"),
-    "the short avail must be reported",
-  );
 
   const codes = new Set(mpd.findings.map((f) => f.code));
   assert.ok(codes.has("NO_PERIOD_CONTINUITY_SIGNAL"), "identical representations across boundaries, undeclared");
-  assert.ok(codes.has("EVENT_MISSING_ID"), "SCTE-35 events cannot be deduplicated across MPD refreshes");
-  assert.ok(codes.has("DUPLICATE_EVENT_STREAMS"), "same signal in a standard and a vendor scheme");
-
-  // Period continuity: no boundary should be reported as a gap or overlap.
+  // Timeline integrity: nothing should be reported about the boundaries.
   assert.ok(!codes.has("PERIOD_TIMELINE_GAP"));
   assert.ok(!codes.has("PERIOD_TIMELINE_OVERLAP"));
   assert.ok(!codes.has("PTO_MISMATCH"));
+  assert.ok(!codes.has("UNCLOSED_BREAK"));
+});
+
+test("DASH EventStream: an avail bounded by auto_return is not reported as open", async () => {
+  const r = await analyzeSample("unified-dash");
+  const mpd = r.renditions[0];
+
+  assert.equal(r.summary.errors, 0);
+  assert.ok(mpd.breaks.length >= 4, "the window carries several avails");
+
+  // These avails state their extent through splice_insert break_duration with
+  // auto_return, so no end event is coming and none should be expected.
+  for (const b of mpd.breaks) {
+    assert.ok(b.closed, "an avail with a declared duration is bounded, not open");
+    assert.equal(b.boundedBy, "auto_return duration");
+    assert.equal(b.actualDuration, b.signalledDuration);
+  }
+  const codes = new Set(mpd.findings.map((f) => f.code));
+  assert.ok(!codes.has("UNCLOSED_BREAK"));
+  assert.ok(!codes.has("BREAK_IN_PROGRESS"));
+  assert.ok(codes.has("SCTE35_CRC_INVALID"), "this packager ships a stale CRC");
 });
 
 test("recorded HLS: all renditions agree, and dual signalling counts once", async () => {

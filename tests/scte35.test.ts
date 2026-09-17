@@ -45,14 +45,22 @@ test("accepts hex as well as base64, producing an identical decode", () => {
 });
 
 test("renders an MPU UPID's format identifier and private payload", () => {
+  // Operators commonly carry pod metadata as JSON in the MPU private data.
+  // Generated here rather than taken from a live service.
   const s = parseSpliceInfoSection(
-    "/DB/AAAAAAAAAP/wBQb/rAujwgBpAmdDVUVJAAubyH//AAAHJDIMU0JFTEx7ImEiOjUuMjEsInAiOiIxLzEiLCJpIjoiNzE4NjU2MTY5LzQyMjgzOTciLCJiIjoiMDA6MDA6MDU7MDYiLCJjIjoiVFNOMSIsInQiOjB9MAAA+2exdw==",
+    "/DBSAAAAAAAAAP/wBQb+E0/ZAAA8AjpDVUVJAAdTe3//AAApMuAMJlRFU1R7InBvZCI6IjIvNSIsImFzc2V0IjoicHJvbW8tMTE4NyJ9MAAALWdtNA==",
   );
   assert.equal(s.crcValid, true);
-  const d = s.descriptors.find((x) => "typeId" in x)! as { typeId: number; upidText: string };
+  const d = s.descriptors.find((x) => "typeId" in x)! as {
+    typeId: number;
+    upidTypeName: string;
+    upidText: string;
+    segmentationDurationSeconds?: number;
+  };
   assert.equal(d.typeId, 0x30, "Provider Advertisement Start");
-  assert.match(d.upidText, /^BELL \{/);
-  assert.match(d.upidText, /"c":"TSN1"/);
+  assert.equal(d.upidTypeName, "MPU");
+  assert.equal(d.segmentationDurationSeconds, 30);
+  assert.equal(d.upidText, 'TEST {"pod":"2/5","asset":"promo-1187"}');
 });
 
 test("reports a bad CRC rather than silently accepting it", () => {

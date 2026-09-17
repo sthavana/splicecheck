@@ -27,10 +27,12 @@
 
   <!-- ad period: wrong PTO, fewer/different representations, gap before it -->
   <Period id="p2" start="PT61S">
+    <!-- Provider Advertisement Start with no segmentation_duration: its extent
+         can only come from a matching end descriptor, and none follows. -->
     <EventStream timescale="90000" schemeIdUri="urn:scte:scte35:2014:xml+bin">
       <Event id="900">
         <scte35:Signal>
-          <scte35:Binary>/DA0AAAAAAAA///wBQb+cr0AUAAeAhxDVUVJSAAAjn/PAAGlmbAICAAAAAAsoKGKNAIAmsnRfg==</scte35:Binary>
+          <scte35:Binary>/DAnAAAAAAAAAP/wBQb+AFPFUAARAg9DVUVJAAADhH+/AAAwAADrrrDN</scte35:Binary>
         </scte35:Signal>
       </Event>
     </EventStream>

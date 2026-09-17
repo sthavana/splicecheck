@@ -173,12 +173,29 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
     // Media starting later than the Period declares.
     const trim = p.mediaStart - p.start;
     if (trim > GAP_WARN) {
-      if (i === 0 && live) {
+      // When the offset exceeds the time-shift buffer it is not a trim at all:
+      // the manifest anchors its timeline at availabilityStartTime (commonly
+      // the epoch) and the number is just how long the channel has been up.
+      const anchoredTimeline = i === 0 && live && trim > (mpd.timeShiftBufferDepth ?? 3600);
+      if (anchoredTimeline) {
+        // nothing to report
+      } else if (i === 0 && live) {
+        // On a long-running channel this offset is the whole age of the
+        // stream, so quote it in sensible units rather than as a nine-digit
+        // millisecond count.
+        const human =
+          trim >= 86400
+            ? `${(trim / 86400).toFixed(1)} days`
+            : trim >= 3600
+              ? `${(trim / 3600).toFixed(1)} hours`
+              : trim >= 60
+                ? `${(trim / 60).toFixed(1)} minutes`
+                : ms(trim);
         add(
           "info",
           "PERIOD_TRIMMED_AT_WINDOW",
-          `Oldest Period starts ${ms(trim)} after its declared @start`,
-          "The first Period's early segments have aged out of the time-shift buffer while Period@start still refers to its original beginning. This is normal for a sliding live window, not a fault.",
+          `Media in the oldest Period begins ${human} after its declared @start`,
+          `Period@start still refers to where the Period originally began, while everything before the ${fmt(mpd.timeShiftBufferDepth)}s time-shift buffer has aged out. On a channel that has been running a long time this offset is simply its age. Normal for a sliding live window, not a fault.`,
           { atTime: p.start },
         );
       } else {
@@ -421,7 +438,19 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
       if (end) usedEnds.add(end);
 
       const startTime = s.period.start + s.event.presentationTime;
-      const actual = end ? end.period.start + end.event.presentationTime - startTime : undefined;
+      // An avail can be bounded two ways: by a matching end event, or by a
+      // declared duration. splice_insert with auto_return, and an Event with
+      // @duration, both state the extent outright — no end signal is coming,
+      // and treating those as unclosed reports every well-formed avail as a
+      // fault.
+      const declared = s.durationSeconds ?? s.event.duration;
+      const autoReturn = s.section?.spliceInsert?.breakDuration?.autoReturn === true;
+      const boundedByDuration = !end && declared !== undefined;
+      const actual = end
+        ? end.period.start + end.event.presentationTime - startTime
+        : boundedByDuration
+          ? declared
+          : undefined;
       const isLast = s.period.index === periods.length - 1;
 
       const b: AdBreak = {
@@ -443,8 +472,9 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
         mediaUris: s.period.adaptationSets
           .map((a) => a.mediaTemplate)
           .filter((m): m is string => !!m),
-        closed: !!end,
-        inProgress: !end && live && isLast,
+        closed: !!end || boundedByDuration,
+        boundedBy: end ? "end event" : boundedByDuration ? (autoReturn ? "auto_return duration" : "declared duration") : undefined,
+        inProgress: !end && !boundedByDuration && live && isLast,
         outLine: 0,
         outTag: `Period ${s.period.id ?? s.period.index} — ${s.event.schemeIdUri}`,
         discontinuityAtStart: true, // a period boundary is inherently a discontinuity
@@ -468,7 +498,7 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
         sm.segmentationType = s.typeName;
       }
 
-      if (!end) {
+      if (!end && !boundedByDuration) {
         if (b.inProgress) {
           add(
             "info",
@@ -486,7 +516,7 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
             { breakIndex: index, atTime: startTime },
           );
         }
-      } else if (b.signalledDuration !== undefined && actual !== undefined) {
+      } else if (end && b.signalledDuration !== undefined && actual !== undefined) {
         const delta = actual - b.signalledDuration;
         if (Math.abs(delta) > GAP_WARN) {
           add(

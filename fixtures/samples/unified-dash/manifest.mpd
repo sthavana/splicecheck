@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Created with Unified Streaming Platform (version=1.15.13-32113) -->
+<MPD
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns="urn:mpeg:dash:schema:mpd:2011"
+  xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd"
+  type="dynamic"
+  availabilityStartTime="1970-01-01T00:00:00Z"
+  publishTime="2026-09-17T19:35:12.610688Z"
+  minimumUpdatePeriod="PT2S"
+  timeShiftBufferDepth="PT10M"
+  maxSegmentDuration="PT3S"
+  minBufferTime="PT10S"
+  profiles="urn:mpeg:dash:profile:isoff-live:2011,urn:com:dashif:dash264">
+  <Period
+    id="1"
+    start="PT0S">
+    <BaseURL>dash/</BaseURL>
+    <EventStream
+      schemeIdUri="urn:scte:scte35:2014:xml+bin"
+      timescale="1000">
+      <!-- 2026-09-17T19:25:14.880000Z - 2026-09-17T19:25:53.280000Z -->
+      <Event
+        presentationTime="1789673114880"
+        duration="38400"
+        id="14795578">
+        <Signal
+          xmlns="http://www.scte.org/schemas/35/2016">
+          <Binary>/DAgAAAAAAAAAP/wDwUA4cM6f//+ADS8AMAAAAAAAORhJCQ=</Binary>
+        </Signal>
+      </Event>
+      <!-- 2026-09-17T19:27:15.840000Z - 2026-09-17T19:27:54.240000Z -->
+      <Event
+        presentationTime="1789673235840"
+        duration="38400"
+        id="14795579">
+        <Signal
+          xmlns="http://www.scte.org/schemas/35/2016">
+          <Binary>/DAgAAAAAAAAAP/wDwUA4cM7f//+ADS8AMAAAAAAAORhJCQ=</Binary>
+        </Signal>
+      </Event>
+      <!-- 2026-09-17T19:29:16.800000Z - 2026-09-17T19:29:55.200000Z -->
+      <Event
+        presentationTime="1789673356800"
+        duration="38400"
+        id="14795580">
+        <Signal
+          xmlns="http://www.scte.org/schemas/35/2016">
+          <Binary>/DAgAAAAAAAAAP/wDwUA4cM8f//+ADS8AMAAAAAAAORhJCQ=</Binary>
+        </Signal>
+      </Event>
+      <!-- 2026-09-17T19:31:17.760000Z - 2026-09-17T19:31:56.160000Z -->
+      <Event
+        presentationTime="1789673477760"
+        duration="38400"
+        id="14795581">
+        <Signal
+          xmlns="http://www.scte.org/schemas/35/2016">
+          <Binary>/DAgAAAAAAAAAP/wDwUA4cM9f//+ADS8AMAAAAAAAORhJCQ=</Binary>
+        </Signal>
+      </Event>
+      <!-- 2026-09-17T19:33:18.720000Z - 2026-09-17T19:33:57.120000Z -->
+      <Event
+        presentationTime="1789673598720"
+        duration="38400"
+        id="14795582">
+        <Signal
+          xmlns="http://www.scte.org/schemas/35/2016">
+          <Binary>/DAgAAAAAAAAAP/wDwUA4cM+f//+ADS8AMAAAAAAAORhJCQ=</Binary>
+        </Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet
+      id="1"
+      group="1"
+      contentType="audio"
+      lang="en"
+      minBandwidth="64000"
+      maxBandwidth="128000"
+      segmentAlignment="true"
+      audioSamplingRate="48000"
+      mimeType="audio/mp4"
+      codecs="mp4a.40.2"
+      startWithSAP="1">
+      <AudioChannelConfiguration
+        schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011"
+        value="1" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate
+        timescale="48000"
+        startNumber="932121411"
+        initialization="scte35-$RepresentationID$.dash"
+        media="scte35-$RepresentationID$-$Time$.dash">
+        <!-- 2026-09-17T19:25:07.200000Z / 1789673107 - 2026-09-17T19:35:08.160000Z -->
+        <SegmentTimeline>
+          <S t="85904309145600" d="92160" r="312" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation
+        id="audio_eng=64000"
+        bandwidth="64000">
+      </Representation>
+      <Representation
+        id="audio_eng=128000"
+        bandwidth="128000">
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet
+      id="2"
+      group="2"
+      contentType="video"
+      par="16:9"
+      minBandwidth="500000"
+      maxBandwidth="1000000"
+      segmentAlignment="true"
+      width="1280"
+      height="720"
+      sar="1:1"
+      frameRate="25"
+      mimeType="video/mp4"
+      codecs="avc1.42C01F"
+      startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate
+        timescale="600"
+        startNumber="932121411"
+        initialization="scte35-$RepresentationID$.dash"
+        media="scte35-$RepresentationID$-$Time$.dash">
+        <!-- 2026-09-17T19:25:07.200000Z / 1789673107 - 2026-09-17T19:35:08.160000Z -->
+        <SegmentTimeline>
+          <S t="1073803864320" d="1152" r="312" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation
+        id="video=500000"
+        bandwidth="500000"
+        scanType="progressive">
+      </Representation>
+      <Representation
+        id="video=1000000"
+        bandwidth="1000000"
+        scanType="progressive">
+      </Representation>
+    </AdaptationSet>
+  </Period>
+  <UTCTiming
+    schemeIdUri="urn:mpeg:dash:utc:http-iso:2014"
+    value="https://time.akamai.com/?iso" />
+</MPD>

@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"
+     xmlns:scte35="urn:scte:scte35:2014:xml+bin"
+     profiles="urn:mpeg:dash:profile:isoff-live:2011"
+     type="dynamic"
+     availabilityStartTime="2026-09-17T00:00:00Z"
+     publishTime="2026-09-20T01:28:20Z"
+     minimumUpdatePeriod="PT2S"
+     minBufferTime="PT4S"
+     timeShiftBufferDepth="PT30M"
+     suggestedPresentationDelay="PT8S">
+  <Period id="91000" start="PT263415.3600S">
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2634153600000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2634153600000" d="19200000" r="95" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2634153600000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2634153600000" d="19200000" r="95" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91001" start="PT263599.6800S">
+    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="10000000">
+      <Event id="480100" presentationTime="2635996800000" duration="304000000">
+        <scte35:Signal><scte35:Binary>/DAsAAAAAAAAAP/wBQb/hg8SgAAWAhRDVUVJAAdTZH//AAApv4AAADAAAEUXP54=</scte35:Binary></scte35:Signal>
+      </Event>
+      <Event id="480101" presentationTime="2636300800000">
+        <scte35:Signal><scte35:Binary>/DAnAAAAAAAAAP/wBQb/hjjSAAARAg9DVUVJAAdTZH+/AAAxAAA9IzBq</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2635996800000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2635996800000" d="19200000" r="14" />
+            <S t="2636284800000" d="16000000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2635996800000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2635996800000" d="19200000" r="14" />
+            <S t="2636284800000" d="16000000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91002" start="PT263630.0800S">
+    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="10000000">
+      <Event id="480102" presentationTime="2636300800000" duration="152000000">
+        <scte35:Signal><scte35:Binary>/DAsAAAAAAAAAP/wBQb/hjjSAAAWAhRDVUVJAAdTZn//AAAU38AAADAAALzCyvg=</scte35:Binary></scte35:Signal>
+      </Event>
+      <Event id="480103" presentationTime="2636452800000">
+        <scte35:Signal><scte35:Binary>/DAnAAAAAAAAAP/wBQb/hk2xwAARAg9DVUVJAAdTZn+/AAAxAADBjOk3</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2636300800000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2636300800000" d="19200000" r="6" />
+            <S t="2636435200000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2636300800000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2636300800000" d="19200000" r="6" />
+            <S t="2636435200000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91003" start="PT263645.2800S">
+    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="10000000">
+      <Event id="480104" presentationTime="2636452800000" duration="304000000">
+        <scte35:Signal><scte35:Binary>/DAsAAAAAAAAAP/wBQb/hk2xwAAWAhRDVUVJAAdTaH//AAApv4AAADAAAFSEc1M=</scte35:Binary></scte35:Signal>
+      </Event>
+      <Event id="480105" presentationTime="2636756800000">
+        <scte35:Signal><scte35:Binary>/DAnAAAAAAAAAP/wBQb/hndxQAARAg9DVUVJAAdTaH+/AAAxAAAMo6cb</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2636452800000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2636452800000" d="19200000" r="14" />
+            <S t="2636740800000" d="16000000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2636452800000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2636452800000" d="19200000" r="14" />
+            <S t="2636740800000" d="16000000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91004" start="PT263675.6800S">
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2636756800000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2636756800000" d="19200000" r="129" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2636756800000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2636756800000" d="19200000" r="129" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91005" start="PT263925.2800S">
+    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="10000000">
+      <Event id="480106" presentationTime="2639252800000" duration="152000000">
+        <scte35:Signal><scte35:Binary>/DAsAAAAAAAAAP/wBQb/h843QAAWAhRDVUVJAAdTan//AAAU38AAADAAADcWPpo=</scte35:Binary></scte35:Signal>
+      </Event>
+      <Event id="480107" presentationTime="2639404800000">
+        <scte35:Signal><scte35:Binary>/DAnAAAAAAAAAP/wBQb/h+MXAAARAg9DVUVJAAdTan+/AAAxAAC7f0PB</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2639252800000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2639252800000" d="19200000" r="6" />
+            <S t="2639387200000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2639252800000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2639252800000" d="19200000" r="6" />
+            <S t="2639387200000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91006" start="PT263940.4800S">
+    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="10000000">
+      <Event id="480108" presentationTime="2639404800000" duration="304000000">
+        <scte35:Signal><scte35:Binary>/DAsAAAAAAAAAP/wBQb/h+MXAAAWAhRDVUVJAAdTbH//AAApv4AAADAAAJzJa/o=</scte35:Binary></scte35:Signal>
+      </Event>
+      <Event id="480109" presentationTime="2639708800000">
+        <scte35:Signal><scte35:Binary>/DAnAAAAAAAAAP/wBQb/iAzWgAARAg9DVUVJAAdTbH+/AAAxAAB0+hzN</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2639404800000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2639404800000" d="19200000" r="14" />
+            <S t="2639692800000" d="16000000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2639404800000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2639404800000" d="19200000" r="14" />
+            <S t="2639692800000" d="16000000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91007" start="PT263970.8800S">
+    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="10000000">
+      <Event id="480110" presentationTime="2639708800000" duration="152000000">
+        <scte35:Signal><scte35:Binary>/DAsAAAAAAAAAP/wBQb/iAzWgAAWAhRDVUVJAAdTbn//AAAU38AAADAAALDY/Xs=</scte35:Binary></scte35:Signal>
+      </Event>
+      <Event id="480111" presentationTime="2639860800000">
+        <scte35:Signal><scte35:Binary>/DAnAAAAAAAAAP/wBQb/iCG2QAARAg9DVUVJAAdTbn+/AAAxAABB+6iP</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2639708800000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2639708800000" d="19200000" r="6" />
+            <S t="2639843200000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2639708800000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2639708800000" d="19200000" r="6" />
+            <S t="2639843200000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91008" start="PT263986.0800S">
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2639860800000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2639860800000" d="19200000" r="167" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2639860800000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2639860800000" d="19200000" r="167" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91009" start="PT264308.6400S">
+    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="10000000">
+      <Event id="480112" presentationTime="2643086400000" duration="304000000">
+        <scte35:Signal><scte35:Binary>/DAsAAAAAAAAAP/wBQb/idyuQAAWAhRDVUVJAAdTcH//AAApv4AAADAAAEvRlfM=</scte35:Binary></scte35:Signal>
+      </Event>
+      <Event id="480113" presentationTime="2643390400000">
+        <scte35:Signal><scte35:Binary>/DAnAAAAAAAAAP/wBQb/igZtwAARAg9DVUVJAAdTcH+/AAAxAACMulM2</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2643086400000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2643086400000" d="19200000" r="14" />
+            <S t="2643374400000" d="16000000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2643086400000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2643086400000" d="19200000" r="14" />
+            <S t="2643374400000" d="16000000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91010" start="PT264339.0400S">
+    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="10000000">
+      <Event id="480114" presentationTime="2643390400000" duration="152000000">
+        <scte35:Signal><scte35:Binary>/DAsAAAAAAAAAP/wBQb/igZtwAAWAhRDVUVJAAdTcn//AAAU38AAADAAAN21Z2Q=</scte35:Binary></scte35:Signal>
+      </Event>
+      <Event id="480115" presentationTime="2643542400000">
+        <scte35:Signal><scte35:Binary>/DAnAAAAAAAAAP/wBQb/ihtNgAARAg9DVUVJAAdTcn+/AAAxAABlSmVS</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2643390400000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2643390400000" d="19200000" r="6" />
+            <S t="2643524800000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2643390400000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2643390400000" d="19200000" r="6" />
+            <S t="2643524800000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91011" start="PT264354.2400S">
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2643542400000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2643542400000" d="19200000" r="67" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2643542400000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2643542400000" d="19200000" r="67" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+  <Period id="91012" start="PT264484.8000S">
+    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="10000000">
+      <Event id="480116" presentationTime="2644848000000" duration="152000000">
+        <scte35:Signal><scte35:Binary>/DAsAAAAAAAAAP/wBQb/is6ZgAAWAhRDVUVJAAdTdH//AAAU38AAADAAAKCMNeo=</scte35:Binary></scte35:Signal>
+      </Event>
+      <Event id="480117" presentationTime="2645000000000">
+        <scte35:Signal><scte35:Binary>/DAnAAAAAAAAAP/wBQb/iuN5QAARAg9DVUVJAAdTdH+/AAAxAADDo1IH</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2644848000000" media="$RepresentationID$_$Time$.m4v" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2644848000000" d="19200000" r="6" />
+            <S t="2644982400000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-360" width="640" height="360" frameRate="30000/1001" codecs="avc1.4d401e" sar="1:1" bandwidth="800000" />
+      <Representation id="video-720" width="1280" height="720" frameRate="60000/1001" codecs="avc1.640028" sar="1:1" bandwidth="3500000" />
+      <Representation id="video-1080" width="1920" height="1080" frameRate="60000/1001" codecs="avc1.64002a" sar="1:1" bandwidth="5500000" />
+    </AdaptationSet>
+    <AdaptationSet id="1" mimeType="audio/mp4" lang="eng" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="10000000" presentationTimeOffset="2644848000000" media="$RepresentationID$_$Time$.m4a" initialization="$RepresentationID$_init.m4i">
+        <SegmentTimeline>
+            <S t="2644848000000" d="19200000" r="6" />
+            <S t="2644982400000" d="17600000" />
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-eng" audioSamplingRate="48000" codecs="mp4a.40.2" bandwidth="128000" />
+    </AdaptationSet>
+  </Period>
+</MPD>

@@ -133,7 +133,7 @@ const parser = new XMLParser({
     ),
 });
 
-/** Attribute lookup that tolerates namespace prefixes (scte35:Binary, hlit-scte35:segmentTypeId). */
+/** Attribute lookup that tolerates namespace prefixes, including vendor ones. */
 function pick(obj: Record<string, unknown>, localName: string): unknown {
   if (obj[`@${localName}`] !== undefined) return obj[`@${localName}`];
   for (const k of Object.keys(obj)) {
