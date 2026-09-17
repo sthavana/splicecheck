@@ -1,0 +1,669 @@
+#EXTM3U
+#EXT-X-VERSION:4
+## Created with Unified Streaming Platform (version=1.15.13-32113)
+#EXT-X-MEDIA-SEQUENCE:932112435
+#EXT-X-INDEPENDENT-SEGMENTS
+#EXT-X-TARGETDURATION:3
+#USP-X-TIMESTAMP-MAP:MPEGTS=7755895200,LOCAL=2026-09-17T14:37:53.280000Z
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:37:53.280000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112435.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112436.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112437.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112438.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112439.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112440.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112441.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112442.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112443.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112444.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112445.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112446.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112447.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112448.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112449.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112450.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112451.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112452.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112453.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112454.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112455.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112456.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112457.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112458.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112459.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112460.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112461.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112462.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112463.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112464.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112465.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112466.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112467.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112468.ts
+## splice_insert(auto_return)
+#EXT-X-DATERANGE:ID="14795436-1789655938",START-DATE="2026-09-17T14:38:58.560000Z",PLANNED-DURATION=38.4,SCTE35-OUT=0xFC302000000000000000FFF00F0500E1C2AC7FFFFE0034BC00C00000000000E4612424
+#EXT-X-CUE-OUT:38.4
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:38:58.560000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112469.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112470.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112471.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112472.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112473.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112474.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112475.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112476.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112477.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112478.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112479.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112480.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112481.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112482.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112483.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112484.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112485.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112486.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112487.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112488.ts
+## Auto Return Mode
+#EXT-X-CUE-IN
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:39:36.960000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112489.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112490.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112491.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112492.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112493.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112494.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112495.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112496.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112497.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112498.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112499.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112500.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112501.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112502.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112503.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112504.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112505.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112506.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112507.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112508.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112509.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112510.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112511.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112512.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112513.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112514.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112515.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112516.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112517.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112518.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112519.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112520.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112521.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112522.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112523.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112524.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112525.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112526.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112527.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112528.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112529.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112530.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112531.ts
+## splice_insert(auto_return)
+#EXT-X-DATERANGE:ID="14795437-1789656059",START-DATE="2026-09-17T14:40:59.520000Z",PLANNED-DURATION=38.4,SCTE35-OUT=0xFC302000000000000000FFF00F0500E1C2AD7FFFFE0034BC00C00000000000E4612424
+#EXT-X-CUE-OUT:38.4
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:40:59.520000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112532.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112533.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112534.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112535.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112536.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112537.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112538.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112539.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112540.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112541.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112542.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112543.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112544.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112545.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112546.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112547.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112548.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112549.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112550.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112551.ts
+## Auto Return Mode
+#EXT-X-CUE-IN
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:41:37.920000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112552.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112553.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112554.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112555.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112556.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112557.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112558.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112559.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112560.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112561.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112562.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112563.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112564.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112565.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112566.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112567.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112568.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112569.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112570.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112571.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112572.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112573.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112574.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112575.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112576.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112577.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112578.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112579.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112580.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112581.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112582.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112583.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112584.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112585.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112586.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112587.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112588.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112589.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112590.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112591.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112592.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112593.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112594.ts
+## splice_insert(auto_return)
+#EXT-X-DATERANGE:ID="14795438-1789656180",START-DATE="2026-09-17T14:43:00.480000Z",PLANNED-DURATION=38.4,SCTE35-OUT=0xFC302000000000000000FFF00F0500E1C2AE7FFFFE0034BC00C00000000000E4612424
+#EXT-X-CUE-OUT:38.4
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:43:00.480000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112595.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112596.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112597.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112598.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112599.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112600.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112601.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112602.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112603.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112604.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112605.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112606.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112607.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112608.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112609.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112610.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112611.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112612.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112613.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112614.ts
+## Auto Return Mode
+#EXT-X-CUE-IN
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:43:38.880000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112615.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112616.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112617.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112618.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112619.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112620.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112621.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112622.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112623.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112624.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112625.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112626.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112627.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112628.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112629.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112630.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112631.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112632.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112633.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112634.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112635.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112636.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112637.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112638.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112639.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112640.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112641.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112642.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112643.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112644.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112645.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112646.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112647.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112648.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112649.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112650.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112651.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112652.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112653.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112654.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112655.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112656.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112657.ts
+## splice_insert(auto_return)
+#EXT-X-DATERANGE:ID="14795439-1789656301",START-DATE="2026-09-17T14:45:01.440000Z",PLANNED-DURATION=38.4,SCTE35-OUT=0xFC302000000000000000FFF00F0500E1C2AF7FFFFE0034BC00C00000000000E4612424
+#EXT-X-CUE-OUT:38.4
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:45:01.440000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112658.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112659.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112660.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112661.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112662.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112663.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112664.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112665.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112666.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112667.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112668.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112669.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112670.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112671.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112672.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112673.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112674.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112675.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112676.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112677.ts
+## Auto Return Mode
+#EXT-X-CUE-IN
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:45:39.840000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112678.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112679.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112680.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112681.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112682.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112683.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112684.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112685.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112686.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112687.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112688.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112689.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112690.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112691.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112692.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112693.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112694.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112695.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112696.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112697.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112698.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112699.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112700.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112701.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112702.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112703.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112704.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112705.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112706.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112707.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112708.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112709.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112710.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112711.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112712.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112713.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112714.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112715.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112716.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112717.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112718.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112719.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112720.ts
+## splice_insert(auto_return)
+#EXT-X-DATERANGE:ID="14795440-1789656422",START-DATE="2026-09-17T14:47:02.400000Z",PLANNED-DURATION=38.4,SCTE35-OUT=0xFC302000000000000000FFF00F0500E1C2B07FFFFE0034BC00C00000000000E4612424
+#EXT-X-CUE-OUT:38.4
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:47:02.400000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112721.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112722.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112723.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112724.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112725.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112726.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112727.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112728.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112729.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112730.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112731.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112732.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112733.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112734.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112735.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112736.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112737.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112738.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112739.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112740.ts
+## Auto Return Mode
+#EXT-X-CUE-IN
+#EXT-X-PROGRAM-DATE-TIME:2026-09-17T14:47:40.800000Z
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112741.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112742.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112743.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112744.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112745.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112746.ts
+#EXTINF:1.92, no desc
+scte35-audio_eng=64000-932112747.ts

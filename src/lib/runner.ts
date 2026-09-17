@@ -33,6 +33,12 @@ export interface SourceMeta {
 
 export type RunResult = AnalysisResult & { meta: SourceMeta };
 
+/**
+ * How a manifest is retrieved. Injected so the same analysis can run against
+ * the network, against a recorded bundle, or against a test fixture.
+ */
+export type Fetcher = (url: string) => Promise<{ text: string; finalUrl: string; ms: number }>;
+
 /** Block obvious SSRF targets. Not a substitute for an egress allowlist in production. */
 export function assertPublicUrl(raw: string): URL {
   let u: URL;
@@ -128,8 +134,12 @@ export function analyzeText(text: string, uri: string): RunResult {
   return { ...summarize(uri, false, [rend], []), meta: { protocol: "hls", fetchMs: 0 } };
 }
 
-export async function analyzeUrl(url: string, maxVariants = DEFAULT_MAX_VARIANTS): Promise<RunResult> {
-  const root = await fetchText(url);
+export async function analyzeUrl(
+  url: string,
+  maxVariants = DEFAULT_MAX_VARIANTS,
+  get: Fetcher = fetchText,
+): Promise<RunResult> {
+  const root = await get(url);
 
   if (isMpd(root.text)) {
     const r = analyzeText(root.text, root.finalUrl);
@@ -158,7 +168,7 @@ export async function analyzeUrl(url: string, maxVariants = DEFAULT_MAX_VARIANTS
 
   const settled = await Promise.allSettled(
     picked.map(async (v, i) => {
-      const r = await fetchText(v.resolvedUri);
+      const r = await get(v.resolvedUri);
       return analyzeRendition(parseMedia(r.text, r.finalUrl), labelFor(v, i), v);
     }),
   );

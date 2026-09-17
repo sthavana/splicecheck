@@ -116,6 +116,8 @@ export interface RenditionAnalysis {
 
 export interface AnalysisResult {
   sourceUri: string;
+  /** set when the analysis ran against a recorded bundle rather than the network */
+  recorded?: { id: string; label: string; capturedAt: string; liveUrl?: string };
   fetchedAt: string;
   isMaster: boolean;
   renditions: RenditionAnalysis[];

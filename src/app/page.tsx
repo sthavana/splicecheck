@@ -62,21 +62,23 @@ function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
   );
 }
 
-const SAMPLES: { label: string; url: string; note: string }[] = [
+const SAMPLES: { id?: string; label: string; url?: string; note: string; recorded?: boolean }[] = [
   {
-    label: "Unified Streaming — SCTE-35 live",
-    url: "https://demo.unified-streaming.com/k8s/live/scte35.isml/.m3u8",
-    note: "Live signal with recurring avails",
+    id: "telus-dash",
+    label: "Multi-period DASH",
+    note: "Recorded from a live linear DASH service — each avail is its own Period",
+    recorded: true,
   },
   {
-    label: "Multi-period DASH (live)",
-    url: "https://origin-irp-telus-avprod-a-01.vos360.video/Content/DASH_DASH/Live/channel(232006004130)/manifest.mpd",
-    note: "Live DASH with per-avail periods and SCTE-35 EventStreams",
+    id: "unified-hls",
+    label: "HLS, dual-signalled",
+    note: "Recorded from a live HLS feed carrying both DATERANGE and CUE-OUT, four renditions",
+    recorded: true,
   },
   {
-    label: "Apple bipbop (no ad signalling)",
+    label: "Apple bipbop (live)",
     url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
-    note: "Control case — should report no breaks",
+    note: "Control case — a stream with no ad signalling at all",
   },
 ];
 
@@ -322,7 +324,7 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [active, setActive] = useState(0);
 
-  async function run(overrideUrl?: string) {
+  async function run(overrideUrl?: string, sampleId?: string) {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -332,7 +334,11 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          mode === "url" || overrideUrl ? { url: overrideUrl ?? url } : { text: paste },
+          sampleId
+            ? { sampleId }
+            : mode === "url" || overrideUrl
+              ? { url: overrideUrl ?? url }
+              : { text: paste },
         ),
       });
       const json = await res.json();
@@ -432,16 +438,17 @@ export default function Home() {
           <span>Try:</span>
           {SAMPLES.map((s) => (
             <button
-              key={s.url}
+              key={s.id ?? s.url}
               onClick={() => {
                 setMode("url");
-                setUrl(s.url);
-                run(s.url);
+                setUrl(s.url ?? "");
+                run(s.url, s.id);
               }}
               title={s.note}
               className="rounded border border-edge px-2 py-1 hover:border-accent hover:text-foreground"
             >
               {s.label}
+              {s.recorded && <span className="ml-1.5 text-[10px] text-muted">recorded</span>}
             </button>
           ))}
         </div>
@@ -466,6 +473,12 @@ export default function Home() {
                       : "No problems detected"}
                 </div>
                 <div className="mt-0.5 font-mono text-[11px] break-all text-muted">{result.sourceUri}</div>
+                {result.recorded && (
+                  <div className="mt-1 text-[11px] text-muted">
+                    Captured {result.recorded.capturedAt} from a live service, so this analysis is
+                    reproducible whether or not that origin is still up.
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 text-xs">
                 <span className={`rounded border px-2 py-1 ${SEVERITY_STYLE.error.chip}`}>
