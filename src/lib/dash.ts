@@ -55,7 +55,7 @@ export interface DashEvent {
   timescale: number;
   /** base64 SCTE-35 from scte35:Binary, if present */
   payload?: string;
-  /** vendor extension attributes such as Harmonic's segmentTypeId */
+  /** vendor extension attributes, such as a packager's own segmentTypeId */
   extraAttrs: Record<string, string>;
 }
 
