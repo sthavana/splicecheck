@@ -101,10 +101,29 @@ function labelFor(v: Variant, i: number): string {
   return `variant ${i + 1}`;
 }
 
+/** A readable rendition label from a path or URL. */
+function labelFromUri(uri: string): string {
+  try {
+    if (/^https?:\/\//i.test(uri)) {
+      const u = new URL(uri);
+      // Manifest filenames are often bare extensions (".mpd", ".m3u8"), so fall
+      // back to the directory that identifies the stream.
+      const parts = u.pathname.split("/").filter(Boolean);
+      const last = parts[parts.length - 1] ?? "";
+      const named = /^[^.]/.test(last) ? last : (parts[parts.length - 2] ?? u.hostname);
+      return named || u.hostname;
+    }
+  } catch {
+    /* fall through */
+  }
+  const base = uri.split(/[/\\]/).pop();
+  return base && base.length > 0 ? base : uri;
+}
+
 export function analyzeText(text: string, uri: string): RunResult {
   if (isMpd(text)) {
     const mpd = parseMpd(text, uri);
-    const rend = analyzeMpd(mpd, "MPD");
+    const rend = analyzeMpd(mpd, labelFromUri(uri));
     return {
       ...summarize(uri, false, [rend], []),
       meta: {
@@ -130,7 +149,7 @@ export function analyzeText(text: string, uri: string): RunResult {
     throw new Error("That is a master playlist. Paste a media playlist, or supply a URL so the variants can be fetched.");
   }
   const pl = parseMedia(text, uri);
-  const rend = analyzeRendition(pl, "pasted playlist");
+  const rend = analyzeRendition(pl, labelFromUri(uri));
   return { ...summarize(uri, false, [rend], []), meta: { protocol: "hls", fetchMs: 0 } };
 }
 

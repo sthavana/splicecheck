@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # better-sqlite3 is a native module and is compiled here.
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Build CLI
+        run: npm run build:cli
+
+      # The CLI is the tool's own contract: it must find the planted defects
+      # and exit non-zero, and stay silent on a well-formed manifest.
+      - name: CLI finds planted defects and fails
+        run: |
+          if ./dist/cli.mjs fixtures/broken.m3u8 --quiet; then
+            echo "CLI exited 0 on a manifest with known errors"; exit 1
+          fi
+
+      - name: CLI passes a well-formed manifest
+        run: ./dist/cli.mjs fixtures/samples/multiperiod-dash/manifest.mpd --quiet
+
+      - name: CLI reports the SSAI comparison
+        run: |
+          if ./dist/cli.mjs compare \
+            fixtures/samples/ssai-source/playlist.m3u8 \
+            fixtures/samples/ssai-output/playlist.m3u8 --quiet; then
+            echo "CLI exited 0 on a pipeline with unfilled avails"; exit 1
+          fi

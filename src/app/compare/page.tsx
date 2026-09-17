@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useState } from "react";
 import type { AvailComparison, AvailStatus, PipelineComparison } from "@/lib/pipeline";
 import type { Finding } from "@/lib/analyze";
@@ -128,9 +130,9 @@ export default function Compare() {
             streams side by side and settles it.
           </p>
         </div>
-        <a href="/" className="shrink-0 text-sm text-accent hover:underline">
+        <Link href="/" className="shrink-0 text-sm text-accent hover:underline">
           ← inspector
-        </a>
+        </Link>
       </header>
 
       <section className="rounded-xl border border-edge bg-panel p-4">

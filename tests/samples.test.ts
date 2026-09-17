@@ -100,3 +100,17 @@ test("recorded HLS: all renditions agree, and dual signalling counts once", asyn
     assert.ok(Math.abs(b.actualDuration! - b.signalledDuration!) < 0.1);
   }
 });
+
+test("DASH: the window is measured from the media, not from Period@start", async () => {
+  // Some packagers leave Period@start at PT0S while anchoring the segment
+  // timeline to availabilityStartTime. Mixing those two reference frames
+  // produced a window of minus fifty-six years.
+  const r = await analyzeSample("unified-dash");
+  const mpd = r.renditions[0];
+  assert.ok(mpd.stats.windowDuration > 0, "window must be positive");
+  assert.ok(
+    mpd.stats.windowDuration < 24 * 3600,
+    "window must be a plausible DVR depth, not an epoch offset",
+  );
+  assert.ok(mpd.stats.adPercent > 0 && mpd.stats.adPercent < 100, "ad load must be a real proportion");
+});

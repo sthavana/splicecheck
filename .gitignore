@@ -42,3 +42,6 @@ next-env.d.ts
 
 # monitor state
 /data
+
+# bundled CLI
+/dist

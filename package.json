@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test tests/*.test.ts",
-    "screenshots": "tsx scripts/screenshots.ts"
+    "screenshots": "tsx scripts/screenshots.ts",
+    "build:cli": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/cli.mjs --banner:js='#!/usr/bin/env node' --log-level=warning && chmod +x dist/cli.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
@@ -32,5 +33,12 @@
   },
   "engines": {
     "node": ">=22 <25"
-  }
+  },
+  "bin": {
+    "splicecheck": "dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

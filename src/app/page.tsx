@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useState } from "react";
 import type { AnalysisResult, AdBreak, Finding, PeriodSummary, RenditionAnalysis } from "@/lib/analyze";
 
@@ -393,12 +395,12 @@ export default function Home() {
         </p>
         </div>
         <div className="flex shrink-0 flex-col gap-1 text-sm">
-          <a href="/compare" className="text-accent hover:underline">
+          <Link href="/compare" className="text-accent hover:underline">
             pipeline comparison →
-          </a>
-          <a href="/monitors" className="text-accent hover:underline">
+          </Link>
+          <Link href="/monitors" className="text-accent hover:underline">
             continuous monitors →
-          </a>
+          </Link>
         </div>
       </header>
 

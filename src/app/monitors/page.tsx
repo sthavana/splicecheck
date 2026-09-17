@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useCallback, useEffect, useState } from "react";
 
 interface MonitorRow {
@@ -90,9 +92,19 @@ export default function Monitors() {
   }, []);
 
   useEffect(() => {
-    void load();
-    const t = setInterval(() => void load(), 5000);
-    return () => clearInterval(t);
+    let live = true;
+    const poll = async () => {
+      if (!live) return;
+      await load();
+    };
+    // Deferred so the first fetch does not set state during the effect itself.
+    const kick = setTimeout(poll, 0);
+    const t = setInterval(poll, 5000);
+    return () => {
+      live = false;
+      clearTimeout(kick);
+      clearInterval(t);
+    };
   }, [load]);
 
   async function add() {
@@ -154,9 +166,9 @@ export default function Monitors() {
             that never closes, signalling that disappears, a new fault that was not there on the last poll.
           </p>
         </div>
-        <a href="/" className="text-sm text-accent hover:underline">
+        <Link href="/" className="text-sm text-accent hover:underline">
           ← one-off inspector
-        </a>
+        </Link>
       </header>
 
       {scheduler && !scheduler.running && scheduler.reason && (

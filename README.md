@@ -1,17 +1,27 @@
 # SpliceCheck
 
+[![CI](https://github.com/sthavana/splicecheck/actions/workflows/ci.yml/badge.svg)](https://github.com/sthavana/splicecheck/actions/workflows/ci.yml)
+
 **Ad-break inspection for HLS and DASH.** Point it at a stream and it
 reconstructs every ad break, decodes the SCTE-35 riding with it, and reports the
 conditions that make server-side ad insertion mis-fire. Then it watches the
 stream and tells you when that changes.
 
-Three parts:
+**Live demo: [splicecheck.vercel.app](https://splicecheck.vercel.app)**
+
+Three parts, plus a CLI:
 
 - **Inspector** (`/`) — a one-off look at any stream
 - **Pipeline comparison** (`/compare`) — the feed going *into* an ad-insertion
   service against the stitched output coming *out* of it, to see which avails
   were actually filled
 - **Monitor** (`/monitors`) — polls on an interval and alerts on transitions
+- **CLI** — the same analysis in a terminal or a build pipeline
+
+> The hosted demo runs the inspector and the comparison in full. Continuous
+> monitoring needs a process alive between requests and a disk that survives it,
+> which serverless gives neither of — so on the demo that page explains itself
+> and offers on-demand polling. `npm run dev` gives the real thing.
 
 ![The inspector analysing a multi-period DASH manifest: zero errors, with each finding explained](docs/inspector-dash.png)
 
@@ -227,6 +237,42 @@ npm test      # 26 tests
   whatsoever*. A tool that cannot stay silent on a healthy pipeline is useless
   on an unhealthy one.
 
+## CLI
+
+```bash
+npm run build:cli
+
+./dist/cli.mjs <url|file>                    # analyse a manifest
+./dist/cli.mjs compare <source> <output>     # compare a feed with its stitched output
+```
+
+Takes a URL or a path, so it works against a live origin or a captured manifest.
+
+| Flag | |
+| --- | --- |
+| `--json` | the full analysis as JSON, for piping |
+| `--strict` | exit non-zero on warnings as well as errors |
+| `--quiet` | findings only, without the explanation of each |
+| `--variants <n>` | maximum HLS renditions to fetch |
+
+Exit codes make it usable as a gate: **0** no errors, **1** problems found,
+**2** could not analyse the input. CI runs it against the defect fixtures on
+every push and fails if it stops catching them.
+
+```
+$ ./dist/cli.mjs compare fixtures/samples/ssai-source/playlist.m3u8 \
+                         fixtures/samples/ssai-output/playlist.m3u8
+
+  fill rate 40.0%  48s of 120s signalled across 4 avails
+
+  12:00:12  signalled     30s  output     30s  filled
+  12:00:54  signalled     30s  output     18s  under-filled
+  12:01:30  signalled     30s  output     30s  passthrough
+  12:02:06  signalled     30s  output      —s  not-stitched
+
+  FAIL  2 errors, 2 warnings, 0 info
+```
+
 ## Architecture
 
 ```
@@ -239,6 +285,7 @@ src/lib/runner.ts      one analysis path, with the fetcher injected
 src/lib/pipeline.ts    source vs stitched-output comparison
 src/lib/monitor.ts     polling, transition diffing, alert delivery
 src/lib/store.ts       SQLite state
+src/cli.ts             terminal interface over the same analysis
 ```
 
 The fetcher is injected, so the identical analysis runs against the network, a

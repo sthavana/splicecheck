@@ -564,12 +564,13 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
   }
 
   // Measure from where media actually exists, not from the oldest Period's
-  // declared @start — on live, that Period has usually been trimmed.
-  const windowDuration = periods.length
-    ? periods[periods.length - 1].start +
-      periods[periods.length - 1].mediaDuration -
-      periods[0].mediaStart
-    : 0;
+  // declared @start — on live that Period has usually been trimmed, and some
+  // packagers leave @start at PT0S while the segment timeline is anchored to
+  // availabilityStartTime. Both ends must come from the media, or the two
+  // reference frames get subtracted from each other.
+  const mediaEnds = periods.map((p) => p.mediaStart + p.mediaDuration);
+  const mediaStarts = periods.map((p) => p.mediaStart);
+  const windowDuration = periods.length ? Math.max(...mediaEnds) - Math.min(...mediaStarts) : 0;
   const adSeconds = adDurations.reduce((a, b) => a + b, 0);
 
   const adPeriodIndexes = new Set(summaries.filter((x) => x.isAd).map((x) => x.index));
