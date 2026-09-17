@@ -312,7 +312,14 @@ export function analyzeRendition(
     const declared = Date.parse(m.attrs["START-DATE"] ?? "");
     if (Number.isNaN(declared)) continue;
     const drift = (declared - m.pdt) / 1000;
-    if (Math.abs(drift) > EPS) {
+    // A DATERANGE stays in the playlist until its whole range has rolled out,
+    // so the oldest one ends up sitting in front of a later segment than the
+    // one it originally preceded. Its START-DATE then reads as earlier than
+    // its position by a margin that grows with every refresh. That is the
+    // window sliding; only a tag that claims a time it does not occupy, or one
+    // that is not at the window edge, is actually inconsistent.
+    const trimmedByWindow = live && drift < 0 && m.segmentIndex === 0;
+    if (Math.abs(drift) > EPS && !trimmedByWindow) {
       add(
         "warning",
         "DATERANGE_START_DATE_MISMATCH",
@@ -519,6 +526,7 @@ export function analyzeRendition(
   }
 
   let dualSignalled = false;
+  let sawOut = false;
 
   for (const p of points) {
     const outs = p.markers.filter((m) => polarityOf(m, decoded.get(m)) === "out");
@@ -529,11 +537,20 @@ export function analyzeRendition(
     if (ins.length) {
       const inM = ins[0];
       if (!open) {
+        // A live window that happens to begin part-way through a break starts
+        // with a return whose departure has already aged out. That is the
+        // window sliding, not a lost signal — and reporting it as an error
+        // makes a healthy stream alternate between pass and fail forever.
+        const leading = !sawOut;
         add(
-          "error",
+          live && leading ? "info" : "error",
           "ORPHAN_CUE_IN",
-          "Return-from-break with no matching break start",
-          `The signal at line ${inM.lineNumber} closes an avail that was never opened in this playlist window. On a live stream this is expected if the CUE-OUT has already rolled out of the DVR window; otherwise the break start was lost somewhere between the encoder and the packager.`,
+          live && leading
+            ? "Window opens part-way through a break"
+            : "Return-from-break with no matching break start",
+          live && leading
+            ? `The playlist begins inside an avail: the return at line ${inM.lineNumber} closes a break whose CUE-OUT has already rolled out of the DVR window. Expected on a sliding live window.`
+            : `The signal at line ${inM.lineNumber} closes an avail that was never opened, and it follows a break that did pair correctly — so this is not the window boundary. The break start was lost somewhere between the encoder and the packager.`,
           { lineNumber: inM.lineNumber, atTime: inM.startTime },
         );
       } else {
@@ -554,15 +571,25 @@ export function analyzeRendition(
         raw: outs.map((m) => m.raw).join("\n"),
       };
       if (open) {
+        // If the still-open break is one the window opened inside of, its
+        // return simply is not in this playlist yet — the next departure is
+        // not nested, it is the next break.
+        const previousWasClipped =
+          live && open.marker.segmentIndex === 0 && open.marker.startTime <= 0.001;
         add(
-          "error",
+          previousWasClipped ? "info" : "error",
           "NESTED_CUE_OUT",
-          "A new break starts before the previous one ended",
-          `The signal at line ${merged.lineNumber} opens an avail while the break opened at line ${open.marker.lineNumber} is still open. Nested avails are not valid; most players take the first and ignore the second, and SSAI state machines commonly wedge here.`,
+          previousWasClipped
+            ? "A break was already in progress when the window opened"
+            : "A new break starts before the previous one ended",
+          previousWasClipped
+            ? `The avail at line ${merged.lineNumber} follows one that was already running when this window began, so no return for it appears here. Expected on a sliding live window.`
+            : `The signal at line ${merged.lineNumber} opens an avail while the break opened at line ${open.marker.lineNumber} is still open. Nested avails are not valid; most players take the first and ignore the second, and SSAI state machines commonly wedge here.`,
           { lineNumber: merged.lineNumber, atTime: merged.startTime },
         );
         closeBreak(null);
       }
+      sawOut = true;
       open = { marker: merged, sig: decoded.get(primary) };
     }
   }

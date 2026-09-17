@@ -124,6 +124,16 @@ not report**:
 - **True signal lead time is not claimed**, because a single poll cannot measure
   it. An earlier version reported it and was quietly wrong; the rule was removed
   rather than left in looking authoritative.
+- A live window that **opens part-way through a break** leaves a return whose
+  departure has already aged out. That is the window sliding, not a lost signal.
+  The same return *after* a break that paired correctly is still an error,
+  because then it is not the window boundary.
+
+That last one was found by running the monitor against a live stream for 90
+minutes. It alternated between `pass` and `fail` roughly every ten minutes as
+the DVR window slid across a break boundary — a healthy stream flapping purely
+because of where the window happened to start. Alert fatigue does not announce
+itself in a unit test; it shows up after an hour of real traffic.
 
 ## What it checks
 
@@ -185,7 +195,21 @@ clearing it alerts once.
 | `STREAM_RECOVERED` / `ERRORS_CLEARED` / `SIGNALLING_RESUMED` | The all-clear |
 
 A new monitor's first successful poll establishes a baseline and does not alert
-on pre-existing faults — otherwise adding a stream floods you.
+on pre-existing faults — otherwise adding a stream floods you. A finding that
+occurs in several renditions is one alert, not one per rendition.
+
+**What 90 minutes of live polling taught it.** The first long run produced 55
+alerts for two healthy streams. Three separate causes, all fixed:
+
+1. A fault present in four renditions raised four identical alerts.
+2. Live windows sliding across a break boundary produced errors that cleared
+   themselves minutes later, so `VERDICT_DEGRADED` and `ERRORS_CLEARED` traded
+   places ten times over.
+3. Genuine origin blips raised alerts before the two-failure threshold had
+   real data behind it.
+
+None of these were visible in the test suite until the behaviour they caused
+was understood well enough to write a test for. Both fixes are now covered.
 
 ## Testing
 

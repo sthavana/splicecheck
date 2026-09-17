@@ -102,3 +102,17 @@ test("the first successful run establishes a baseline without alerting on existi
   const alerts = diffRun(undefined, result("fail", 2, 1, 5, [f("error", "PTO_MISMATCH")]), monitor);
   assert.ok(!alerts.some((a) => a.code.startsWith("NEW_")), "a new monitor must not page about pre-existing state");
 });
+
+test("one finding across many renditions produces one alert, not one each", () => {
+  const prev = run({ verdict: "pass", codes: "[]" });
+  const withFourRenditions = result("fail", 4, 0, 5, [
+    f("error", "VARIANT_MISSING_BREAK"),
+    f("error", "VARIANT_MISSING_BREAK"),
+    f("error", "VARIANT_MISSING_BREAK"),
+    f("error", "VARIANT_MISSING_BREAK"),
+  ]);
+  const alerts = diffRun(prev, withFourRenditions, monitor);
+  const newAlerts = alerts.filter((a) => a.code === "NEW_VARIANT_MISSING_BREAK");
+  assert.equal(newAlerts.length, 1, "four renditions reporting one fault is one alert");
+  assert.match(newAlerts[0].detail, /4 renditions/);
+});

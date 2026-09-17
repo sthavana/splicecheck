@@ -56,16 +56,22 @@ export function diffRun(prev: Run | undefined, result: RunResult, monitor: Monit
     });
   }
 
-  // New problems, reported once when they appear.
+  // New problems, reported once when they appear. A finding that occurs in
+  // several renditions is one problem, not one per rendition — alerting per
+  // occurrence is how a single fault turns into a page-full of duplicates.
+  const seenCodes = new Set<string>();
   for (const f of findings) {
     if (prevCodes.has(f.code)) continue;
     if (f.severity === "info") continue;
     if (!hadPrevGoodRun) continue; // first successful run establishes the baseline
+    if (seenCodes.has(f.code)) continue;
+    seenCodes.add(f.code);
+    const occurrences = findings.filter((x) => x.code === f.code).length;
     alerts.push({
       severity: f.severity as "error" | "warning",
       code: `NEW_${f.code}`,
       title: `${monitor.label}: ${f.title}`,
-      detail: f.detail,
+      detail: occurrences > 1 ? `${f.detail} (seen in ${occurrences} renditions)` : f.detail,
     });
   }
 

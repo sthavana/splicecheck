@@ -106,3 +106,103 @@ test("HLS: an unstitched feed is not accused of missing discontinuities", () => 
   assert.ok(!found.has("NO_DISCONTINUITY_AT_BREAK_END"));
   assert.ok(found.has("SIGNALLING_ONLY_STREAM"));
 });
+
+test("HLS live: a window opening mid-break is not an error", () => {
+  // The DVR window has slid past a CUE-OUT, leaving its CUE-IN at the top.
+  const live = [
+    "#EXTM3U",
+    "#EXT-X-VERSION:6",
+    "#EXT-X-TARGETDURATION:6",
+    "#EXT-X-MEDIA-SEQUENCE:500",
+    "#EXT-X-PROGRAM-DATE-TIME:2026-09-17T10:00:00.000Z",
+    "#EXTINF:6.000,",
+    "ad_tail.ts",
+    "#EXT-X-CUE-IN",
+    "#EXTINF:6.000,",
+    "prog_a.ts",
+    "#EXT-X-CUE-OUT:12.0",
+    "#EXTINF:6.000,",
+    "ad_b0.ts",
+    "#EXTINF:6.000,",
+    "ad_b1.ts",
+    "#EXT-X-CUE-IN",
+    "#EXTINF:6.000,",
+    "prog_b.ts",
+  ].join("\n"); // no ENDLIST: live
+  const r = analyzeText(live, "live");
+  assert.equal(r.summary.errors, 0, "a sliding window must not make a healthy stream report errors");
+  const orphan = r.renditions[0].findings.find((f) => f.code === "ORPHAN_CUE_IN");
+  assert.ok(orphan);
+  assert.equal(orphan.severity, "info");
+});
+
+test("HLS: a return with no departure after a paired break is still an error", () => {
+  const broken = [
+    "#EXTM3U",
+    "#EXT-X-VERSION:6",
+    "#EXT-X-TARGETDURATION:6",
+    "#EXT-X-PROGRAM-DATE-TIME:2026-09-17T10:00:00.000Z",
+    "#EXTINF:6.000,",
+    "prog_a.ts",
+    "#EXT-X-CUE-OUT:6.0",
+    "#EXTINF:6.000,",
+    "ad_a.ts",
+    "#EXT-X-CUE-IN",
+    "#EXTINF:6.000,",
+    "prog_b.ts",
+    "#EXT-X-CUE-IN",
+    "#EXTINF:6.000,",
+    "prog_c.ts",
+  ].join("\n");
+  const r = analyzeText(broken, "broken");
+  const orphan = r.renditions[0].findings.find((f) => f.code === "ORPHAN_CUE_IN");
+  assert.ok(orphan);
+  assert.equal(orphan.severity, "error", "this one is not the window boundary");
+});
+
+test("HLS live: a DATERANGE left behind by the sliding window is not a mismatch", () => {
+  // The tag persists at the top of the playlist while the segments it
+  // originally preceded have aged out, so START-DATE reads as earlier than
+  // the position it now occupies.
+  const live = [
+    "#EXTM3U",
+    "#EXT-X-VERSION:6",
+    "#EXT-X-TARGETDURATION:6",
+    "#EXT-X-MEDIA-SEQUENCE:900",
+    '#EXT-X-DATERANGE:ID="old",START-DATE="2026-09-17T09:59:30.000Z",PLANNED-DURATION=30.0',
+    "#EXT-X-PROGRAM-DATE-TIME:2026-09-17T10:00:00.000Z",
+    "#EXTINF:6.000,",
+    "ad_tail.ts",
+    "#EXT-X-CUE-IN",
+    "#EXTINF:6.000,",
+    "prog_a.ts",
+  ].join("\n");
+  const r = analyzeText(live, "live");
+  assert.ok(
+    !r.renditions[0].findings.some((f) => f.code === "DATERANGE_START_DATE_MISMATCH"),
+    "a tag trimmed by the window must not be reported",
+  );
+});
+
+test("HLS: a DATERANGE claiming a time it does not occupy is still reported", () => {
+  const drifted = [
+    "#EXTM3U",
+    "#EXT-X-VERSION:6",
+    "#EXT-X-TARGETDURATION:6",
+    "#EXT-X-PROGRAM-DATE-TIME:2026-09-17T10:00:00.000Z",
+    "#EXTINF:6.000,",
+    "prog_a.ts",
+    '#EXT-X-DATERANGE:ID="late",START-DATE="2026-09-17T10:00:20.000Z",PLANNED-DURATION=30.0',
+    "#EXT-X-CUE-OUT:30.0",
+    "#EXTINF:6.000,",
+    "ad_a.ts",
+    "#EXT-X-CUE-IN",
+    "#EXTINF:6.000,",
+    "prog_b.ts",
+  ].join("\n");
+  const r = analyzeText(drifted, "drifted");
+  assert.ok(
+    r.renditions[0].findings.some((f) => f.code === "DATERANGE_START_DATE_MISMATCH"),
+    "START-DATE 8s after the position it occupies is a real inconsistency",
+  );
+});
