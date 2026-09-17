@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"
+     xmlns:scte35="urn:scte:scte35:2014:xml+bin"
+     profiles="urn:mpeg:dash:profile:isoff-live:2011"
+     type="dynamic"
+     availabilityStartTime="2026-09-17T00:00:00Z"
+     publishTime="2026-09-17T10:00:00Z"
+     minimumUpdatePeriod="PT20S"
+     timeShiftBufferDepth="PT30M"
+     minBufferTime="PT4S">
+
+  <!-- content period: fine -->
+  <Period id="p1" start="PT0S">
+    <AdaptationSet mimeType="video/mp4" id="0">
+      <SegmentTemplate timescale="90000" presentationTimeOffset="0" media="$RepresentationID$_$Time$.m4v">
+        <SegmentTimeline><S t="0" d="540000" r="9"/></SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="v1" codecs="avc1.640028" width="1280" height="720" bandwidth="3500000"/>
+    </AdaptationSet>
+    <AdaptationSet mimeType="audio/mp4" lang="eng" id="1">
+      <SegmentTemplate timescale="90000" presentationTimeOffset="0" media="$RepresentationID$_$Time$.m4a">
+        <SegmentTimeline><S t="0" d="513000" r="9"/></SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="a1" codecs="mp4a.40.2" bandwidth="128000"/>
+    </AdaptationSet>
+  </Period>
+
+  <!-- ad period: wrong PTO, fewer/different representations, gap before it -->
+  <Period id="p2" start="PT61S">
+    <EventStream timescale="90000" schemeIdUri="urn:scte:scte35:2014:xml+bin">
+      <Event id="900">
+        <scte35:Signal>
+          <scte35:Binary>/DA0AAAAAAAA///wBQb+cr0AUAAeAhxDVUVJSAAAjn/PAAGlmbAICAAAAAAsoKGKNAIAmsnRfg==</scte35:Binary>
+        </scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet mimeType="video/mp4" id="0">
+      <SegmentTemplate timescale="90000" presentationTimeOffset="5400000" media="$RepresentationID$_$Time$.m4v">
+        <SegmentTimeline><S t="5490000" d="540000" r="4"/></SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="v1-ad" codecs="avc1.4d401f" width="854" height="480" bandwidth="1950000"/>
+    </AdaptationSet>
+  </Period>
+
+  <!-- return to content: overlaps the ad period, and the SCTE-35 is corrupt -->
+  <Period id="p3" start="PT89S">
+    <EventStream timescale="90000" schemeIdUri="urn:scte:scte35:2014:xml+bin">
+      <Event id="901">
+        <scte35:Signal><scte35:Binary>bm90LXNjdGUtMzUtYXQtYWxs</scte35:Binary></scte35:Signal>
+      </Event>
+    </EventStream>
+    <AdaptationSet mimeType="video/mp4" id="0">
+      <SegmentTemplate timescale="90000" presentationTimeOffset="8010000" media="$RepresentationID$_$Time$.m4v">
+        <SegmentTimeline><S t="8010000" d="540000" r="9"/></SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="v1" codecs="avc1.640028" width="1280" height="720" bandwidth="3500000"/>
+    </AdaptationSet>
+  </Period>
+
+  <!-- duplicate id, and no media at all -->
+  <Period id="p3" start="PT149S">
+    <AdaptationSet mimeType="video/mp4" id="0">
+      <SegmentTemplate timescale="90000" presentationTimeOffset="13410000" media="$RepresentationID$_$Time$.m4v">
+        <SegmentTimeline/>
+      </SegmentTemplate>
+      <Representation id="v1" codecs="avc1.640028" width="1280" height="720" bandwidth="3500000"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

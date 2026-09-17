@@ -281,6 +281,26 @@ function readUpid(type: number, bytes: Uint8Array): { hex: string; text: string 
   } else if (type === 0x08 && bytes.length === 8) {
     // Turner Identifier is a 64-bit value.
     text = "0x" + hex;
+  } else if (type === 0x0c && bytes.length > 4) {
+    // MPU: a 4-byte format_identifier followed by private data, which
+    // operators commonly use to carry pod metadata as JSON.
+    const fid = Buffer.from(bytes.slice(0, 4)).toString("ascii").replace(/[^\x20-\x7e]/g, "");
+    const priv = Buffer.from(bytes.slice(4)).toString("utf8");
+    text = /^[\x20-\x7e\s]*$/.test(priv) ? `${fid} ${priv}` : `${fid} 0x${hex.slice(8)}`;
+  } else if (type === 0x0d) {
+    // MID: a concatenation of sub-UPIDs, each with its own type and length.
+    const parts: string[] = [];
+    let i = 0;
+    while (i + 2 <= bytes.length) {
+      const t = bytes[i];
+      const len = bytes[i + 1];
+      const body = bytes.slice(i + 2, i + 2 + len);
+      if (i + 2 + len > bytes.length) break;
+      const sub = readUpid(t, body);
+      parts.push(`${UPID_TYPES[t] ?? "0x" + t.toString(16)}=${sub.text || sub.hex}`);
+      i += 2 + len;
+    }
+    text = parts.join(" | ");
   } else if (type === 0x10 && bytes.length === 16) {
     text = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }

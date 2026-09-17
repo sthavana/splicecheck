@@ -40,6 +40,8 @@ export interface DecodedSignal {
 
 export interface AdBreak {
   index: number;
+  /** DASH: the Period this break begins in */
+  periodId?: string;
   /** seconds into the playlist window */
   startTime: number;
   pdt?: number;
@@ -71,11 +73,32 @@ export interface AdBreak {
   windowClipped?: boolean;
 }
 
+export interface PeriodSummary {
+  id?: string;
+  index: number;
+  start: number;
+  mediaStart: number;
+  duration: number;
+  isAd: boolean;
+  segmentationType?: string;
+  eventCount: number;
+  adaptationSetCount: number;
+  representationCount: number;
+  /** spread between this period's adaptation-set durations, seconds */
+  avSkew: number;
+  /** gap (positive) or overlap (negative) to the next period, seconds */
+  gapToNext?: number;
+}
+
 export interface RenditionAnalysis {
   label: string;
   uri: string;
+  protocol: "hls" | "dash";
   variant?: Variant;
-  playlist: MediaPlaylist;
+  /** HLS only */
+  playlist?: MediaPlaylist;
+  /** DASH only */
+  periods?: PeriodSummary[];
   breaks: AdBreak[];
   findings: Finding[];
   stats: {
@@ -559,6 +582,7 @@ export function analyzeRendition(
   return {
     label,
     uri: playlist.uri,
+    protocol: "hls",
     variant,
     playlist,
     breaks,
@@ -591,7 +615,7 @@ export function analyzeCrossVariant(rends: RenditionAnalysis[]): Finding[] {
   // rendition actually covers — otherwise a break that has simply rolled out
   // of one window reads as a missing break.
   const windows = rends.map((r) => {
-    const segs = r.playlist.segments;
+    const segs = r.playlist?.segments ?? [];
     const last = segs[segs.length - 1];
     return {
       start: segs[0]?.pdt,
@@ -690,7 +714,7 @@ export function analyzeCrossVariant(rends: RenditionAnalysis[]): Finding[] {
   // Signalling style should be consistent across renditions too.
   const styles = new Map<string, string[]>();
   for (const r of rends) {
-    const kinds = [...new Set(r.playlist.markers.map((m) => m.kind))].sort().join("+") || "none";
+    const kinds = [...new Set((r.playlist?.markers ?? []).map((m) => m.kind))].sort().join("+") || "none";
     const l = styles.get(kinds) ?? [];
     l.push(r.label);
     styles.set(kinds, l);

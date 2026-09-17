@@ -1,13 +1,77 @@
 "use client";
 
 import { useState } from "react";
-import type { AnalysisResult, AdBreak, Finding, RenditionAnalysis } from "@/lib/analyze";
+import type { AnalysisResult, AdBreak, Finding, PeriodSummary, RenditionAnalysis } from "@/lib/analyze";
+
+function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
+  const t0 = periods[0]?.start ?? 0;
+  const maxGap = Math.max(0, ...periods.map((p) => Math.abs(p.gapToNext ?? 0)));
+  return (
+    <div className="rounded-lg border border-edge bg-panel">
+      <div className="border-b border-edge px-4 py-2 text-[11px] uppercase tracking-wide text-muted">
+        Period timeline — {periods.length} periods, {periods.filter((p) => p.isAd).length} carrying ad signalling
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="text-muted">
+            <tr className="border-b border-edge/70">
+              <th className="px-4 py-2 font-medium">Period</th>
+              <th className="px-3 py-2 font-medium">Offset</th>
+              <th className="px-3 py-2 font-medium">Duration</th>
+              <th className="px-3 py-2 font-medium">Kind</th>
+              <th className="px-3 py-2 font-medium">A/V skew</th>
+              <th className="px-3 py-2 font-medium">Gap to next</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono">
+            {periods.map((p) => {
+              const gap = p.gapToNext;
+              const gapBad = gap !== undefined && Math.abs(gap) > 0.05;
+              return (
+                <tr key={p.index} className="border-b border-edge/40 last:border-0">
+                  <td className="px-4 py-1.5">{p.id ?? p.index}</td>
+                  <td className="px-3 py-1.5 text-muted">{(p.start - t0).toFixed(3)}s</td>
+                  <td className="px-3 py-1.5">{p.duration.toFixed(3)}s</td>
+                  <td className="px-3 py-1.5">
+                    {p.isAd ? (
+                      <span className="rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                        AD
+                      </span>
+                    ) : (
+                      <span className="text-muted">content</span>
+                    )}
+                    {p.segmentationType && <span className="ml-2 font-sans text-muted">{p.segmentationType}</span>}
+                  </td>
+                  <td className={`px-3 py-1.5 ${p.avSkew > 0.1 ? "text-amber-300" : "text-muted"}`}>
+                    {(p.avSkew * 1000).toFixed(1)}ms
+                  </td>
+                  <td className={`px-3 py-1.5 ${gapBad ? "text-red-300" : "text-muted"}`}>
+                    {gap === undefined ? "—" : `${gap >= 0 ? "+" : ""}${(gap * 1000).toFixed(1)}ms`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="border-t border-edge px-4 py-2 text-[11px] text-muted">
+        Largest boundary discontinuity {(maxGap * 1000).toFixed(1)}ms. Sub-frame differences are normal;
+        anything past 50ms is reported as a finding.
+      </div>
+    </div>
+  );
+}
 
 const SAMPLES: { label: string; url: string; note: string }[] = [
   {
     label: "Unified Streaming — SCTE-35 live",
     url: "https://demo.unified-streaming.com/k8s/live/scte35.isml/.m3u8",
     note: "Live signal with recurring avails",
+  },
+  {
+    label: "Multi-period DASH (live)",
+    url: "https://origin-irp-telus-avprod-a-01.vos360.video/Content/DASH_DASH/Live/channel(232006004130)/manifest.mpd",
+    note: "Live DASH with per-avail periods and SCTE-35 EventStreams",
   },
   {
     label: "Apple bipbop (no ad signalling)",
@@ -69,7 +133,7 @@ function BreakCard({ b }: { b: AdBreak }) {
             {b.segmentationType ?? (b.outOfNetwork === true ? "splice_insert out of network" : "Ad break")}
           </span>
           <span className="block font-mono text-[11px] text-muted">
-            t={secs(b.startTime)} · {clock(b.pdt)}
+            {b.periodId ? `period ${b.periodId} · ` : ""}t={secs(b.startTime)} · {clock(b.pdt)}
           </span>
         </span>
         <span className="hidden text-right sm:block">
@@ -195,21 +259,32 @@ function RenditionPanel({ r }: { r: RenditionAnalysis }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Ad breaks" value={String(r.stats.breakCount)} />
-        <Stat label="Segments" value={String(r.stats.segmentCount)} />
+        <Stat
+          label={r.protocol === "dash" ? "Periods" : "Segments"}
+          value={String(r.protocol === "dash" ? (r.periods?.length ?? 0) : r.stats.segmentCount)}
+        />
         <Stat label="Window" value={`${Math.round(r.stats.windowDuration)}s`} />
         <Stat label="Ad load" value={`${r.stats.adPercent.toFixed(1)}%`} />
       </div>
 
       <div className="flex flex-wrap gap-2 text-[11px]">
         <Tag on={r.stats.live} yes="LIVE" no="VOD" />
-        <Tag on={r.stats.hasPdt} yes="PROGRAM-DATE-TIME" no="no PDT" warnOnNo />
+        <Tag
+          on={r.stats.hasPdt}
+          yes={r.protocol === "dash" ? "availabilityStartTime" : "PROGRAM-DATE-TIME"}
+          no={r.protocol === "dash" ? "no availabilityStartTime" : "no PDT"}
+          warnOnNo
+        />
+        <span className="rounded border border-edge px-2 py-1 uppercase text-muted">{r.protocol}</span>
         {r.stats.lowLatency && <span className="rounded border border-edge px-2 py-1 text-muted">LL-HLS</span>}
-        {r.playlist.targetDuration && (
+        {r.playlist?.targetDuration && (
           <span className="rounded border border-edge px-2 py-1 text-muted">
             TARGETDURATION {r.playlist.targetDuration}s
           </span>
         )}
       </div>
+
+      {r.protocol === "dash" && r.periods && <PeriodTable periods={r.periods} />}
 
       {r.breaks.length > 0 ? (
         <div className="space-y-2">
@@ -286,7 +361,8 @@ export default function Home() {
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
-      <header className="mb-8">
+      <header className="mb-8 flex flex-wrap items-start justify-between gap-3">
+        <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           Splice<span className="text-accent">Check</span>
         </h1>
@@ -295,6 +371,10 @@ export default function Home() {
           it, and reports the conditions that make server-side ad insertion mis-fire — unclosed avails,
           duration disagreements, missing discontinuities, and renditions that do not splice at the same point.
         </p>
+        </div>
+        <a href="/monitors" className="shrink-0 text-sm text-accent hover:underline">
+          continuous monitors →
+        </a>
       </header>
 
       <section className="rounded-xl border border-edge bg-panel p-4">
@@ -318,7 +398,7 @@ export default function Home() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !loading && run()}
-              placeholder="https://example.com/live/master.m3u8"
+              placeholder="https://example.com/live/master.m3u8  or  manifest.mpd"
               className="flex-1 rounded-lg border border-edge bg-black/30 px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
             />
             <button
@@ -438,8 +518,9 @@ export default function Home() {
       )}
 
       <footer className="mt-16 border-t border-edge pt-4 text-xs text-muted">
-        Decodes SCTE-35 per ANSI/SCTE 35 2022. Supports EXT-X-CUE-OUT/IN, EXT-X-DATERANGE,
-        EXT-OATCLS-SCTE35, EXT-X-SCTE35 and EXT-X-SPLICEPOINT-SCTE35.
+        Decodes SCTE-35 per ANSI/SCTE 35 2022. HLS: EXT-X-CUE-OUT/IN, EXT-X-DATERANGE, EXT-OATCLS-SCTE35,
+        EXT-X-SCTE35, EXT-X-SPLICEPOINT-SCTE35. DASH: multi-period, SCTE-35 EventStreams, period continuity,
+        presentation-time offsets.
       </footer>
     </main>
   );
