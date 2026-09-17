@@ -7,7 +7,7 @@ function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
   const t0 = periods[0]?.start ?? 0;
   const maxGap = Math.max(0, ...periods.map((p) => Math.abs(p.gapToNext ?? 0)));
   return (
-    <div className="rounded-lg border border-edge bg-panel">
+    <div data-shot="periods" className="rounded-lg border border-edge bg-panel">
       <div className="border-b border-edge px-4 py-2 text-[11px] uppercase tracking-wide text-muted">
         Period timeline — {periods.length} periods, {periods.filter((p) => p.isAd).length} carrying ad signalling
       </div>
@@ -46,7 +46,12 @@ function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
                     {(p.avSkew * 1000).toFixed(1)}ms
                   </td>
                   <td className={`px-3 py-1.5 ${gapBad ? "text-red-300" : "text-muted"}`}>
-                    {gap === undefined ? "—" : `${gap >= 0 ? "+" : ""}${(gap * 1000).toFixed(1)}ms`}
+                    {gap === undefined
+                      ? "—"
+                      : (() => {
+                          const msRounded = Math.round(gap * 1000 * 10) / 10 || 0;
+                          return `${msRounded >= 0 ? "+" : ""}${msRounded.toFixed(1)}ms`;
+                        })()}
                   </td>
                 </tr>
               );
@@ -143,7 +148,7 @@ function BreakCard({ b }: { b: AdBreak }) {
             signalled {secs(b.signalledDuration)} · actual {secs(b.actualDuration)}
           </span>
           <span className="block text-[11px] text-muted">
-            {b.segmentCount} segments
+            {b.segmentCount} segment{b.segmentCount === 1 ? "" : "s"}
             {delta !== undefined && Math.abs(delta) > 0.01 && (
               <span className={Math.abs(delta) > 0.5 ? "text-amber-300" : ""}>
                 {" "}· {delta > 0 ? "+" : ""}
@@ -178,7 +183,7 @@ function BreakCard({ b }: { b: AdBreak }) {
       </button>
 
       {open && (
-        <div className="border-t border-edge px-4 py-3 text-sm">
+        <div data-shot="break-detail" className="border-t border-edge px-4 py-3 text-sm">
           <dl className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
             <Row k="Signalled duration" v={`${secs(b.signalledDuration)}${b.signalledDurationSource ? ` (${b.signalledDurationSource})` : ""}`} />
             <Row k="Actual segment total" v={secs(b.actualDuration)} />
@@ -242,7 +247,9 @@ function Row({ k, v, warn, mono }: { k: string; v: string; warn?: boolean; mono?
   return (
     <div className="flex justify-between gap-4 border-b border-edge/50 py-1">
       <dt className="text-muted">{k}</dt>
-      <dd className={`${mono ? "font-mono text-xs" : ""} ${warn ? "text-amber-300" : ""} text-right`}>{v}</dd>
+      <dd className={`${mono ? "font-mono text-xs" : ""} ${warn ? "text-amber-300" : ""} min-w-0 break-all text-right`}>
+        {v}
+      </dd>
     </div>
   );
 }
@@ -373,9 +380,10 @@ export default function Home() {
           Splice<span className="text-accent">Check</span>
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-          Point it at an HLS stream and it reconstructs every ad break, decodes the SCTE-35 riding with
-          it, and reports the conditions that make server-side ad insertion mis-fire — unclosed avails,
-          duration disagreements, missing discontinuities, and renditions that do not splice at the same point.
+          Point it at an HLS or DASH stream and it reconstructs every ad break, decodes the SCTE-35
+          riding with it, and reports the conditions that make server-side ad insertion mis-fire —
+          unclosed avails, duration disagreements, missing discontinuities, renditions that do not
+          splice at the same point, and periods that do not meet.
         </p>
         </div>
         <div className="flex shrink-0 flex-col gap-1 text-sm">

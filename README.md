@@ -13,6 +13,8 @@ Three parts:
   were actually filled
 - **Monitor** (`/monitors`) — polls on an interval and alerts on transitions
 
+![The inspector analysing a recorded multi-period DASH service: zero errors, four warnings, and findings explaining each one](docs/inspector-dash.png)
+
 ---
 
 ## Try it without a live stream
@@ -52,6 +54,8 @@ the output actually fills. The worked example (`/compare` → "Run the worked
 example") shows 40% across four avails — one filled, one 12s short, one passed
 through, one never stitched.
 
+![Pipeline comparison showing a 40% fill rate, with each avail classified as filled, under-filled, passed through, or not stitched](docs/pipeline-compare.png)
+
 Because matching is on wall clock — `EXT-X-PROGRAM-DATE-TIME` in HLS,
 `availabilityStartTime` plus period start in DASH — the two sides do not have to
 be the same protocol. A DASH packager feeding an HLS output compares fine.
@@ -90,6 +94,14 @@ What it surfaces are the things nobody has a reason to look for:
   only one, and the analyser reports it and nothing else.
 - The MPU UPID carries pod metadata as JSON, which the decoder renders:
   `BELL {"a":5.21,"p":"1/1","i":"718656169/4228397","b":"00:00:05;06","c":"TSN1","t":0}`
+
+![Period timeline: 29 periods, ad periods marked, A/V skew in milliseconds, and every boundary gap at zero](docs/inspector-periods.png)
+
+Expanding a break shows the decoded `splice_info_section` behind it — command,
+segmentation descriptor, UPID and CRC state — next to what the manifest claims,
+so the two can be compared directly:
+
+![A decoded SCTE-35 section: time_signal, CRC valid, segmentation type 0x30, and the MPU UPID rendered as readable JSON](docs/inspector-scte35.png)
 
 **On the HLS feed**
 
@@ -193,6 +205,8 @@ clearing it alerts once.
 | `VERDICT_DEGRADED` | pass → warn → fail |
 | `STREAM_UNREACHABLE` | Two consecutive failures, so one CDN hiccup stays quiet |
 | `STREAM_RECOVERED` / `ERRORS_CLEARED` / `SIGNALLING_RESUMED` | The all-clear |
+
+![Two live streams under continuous monitoring, sparklines showing poll history, and an empty alert feed](docs/monitors.png)
 
 A new monitor's first successful poll establishes a baseline and does not alert
 on pre-existing faults — otherwise adding a stream floods you. A finding that
