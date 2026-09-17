@@ -9,7 +9,7 @@
 
 import { randomUUID } from "node:crypto";
 import { analyzeUrl, type RunResult } from "./runner";
-import { store, type Monitor, type Run } from "./store";
+import { EPHEMERAL_STORAGE, store, type Monitor, type Run } from "./store";
 
 const FAILURES_BEFORE_ALERT = 2;
 /** grace beyond a break's signalled duration before it counts as stuck */
@@ -276,7 +276,25 @@ async function tick() {
   }
 }
 
+export interface SchedulerStatus {
+  running: boolean;
+  reason?: string;
+}
+
+export function schedulerStatus(): SchedulerStatus {
+  if (EPHEMERAL_STORAGE) {
+    return {
+      running: false,
+      reason:
+        "This deployment is serverless: there is no process between requests to run the poll loop, and its disk does not survive the instance. Continuous monitoring needs a long-lived process — run the project locally, or host it somewhere that keeps one.",
+    };
+  }
+  return { running: !!g.__splicecheckScheduler };
+}
+
 export function startScheduler() {
+  // Nothing to schedule on a platform that does not keep a process alive.
+  if (EPHEMERAL_STORAGE) return;
   if (g.__splicecheckScheduler) return;
   g.__splicecheckScheduler = setInterval(() => void tick(), 5000);
   void tick();

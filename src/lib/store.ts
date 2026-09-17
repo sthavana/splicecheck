@@ -55,7 +55,17 @@ export interface OpenBreak {
   alerted: number;
 }
 
-const DB_PATH = resolve(process.env.SPLICECHECK_DB ?? "./data/splicecheck.db");
+/**
+ * Serverless platforms give a function only /tmp to write to, and that disk
+ * does not survive the instance. The monitor therefore cannot run there — see
+ * `schedulerStatus` — but the database still has to open so the rest of the
+ * app serves normally.
+ */
+export const EPHEMERAL_STORAGE = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+const DB_PATH = resolve(
+  process.env.SPLICECHECK_DB ?? (EPHEMERAL_STORAGE ? "/tmp/splicecheck.db" : "./data/splicecheck.db"),
+);
 
 function init(): Database.Database {
   mkdirSync(dirname(DB_PATH), { recursive: true });

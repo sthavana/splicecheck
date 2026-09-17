@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { store } from "@/lib/store";
-import { newMonitorId, runMonitorOnce, startScheduler } from "@/lib/monitor";
+import { newMonitorId, runMonitorOnce, schedulerStatus, startScheduler } from "@/lib/monitor";
 import { assertPublicUrl } from "@/lib/runner";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,11 @@ export async function GET() {
         .map((r) => ({ at: r.at, ok: r.ok, verdict: r.verdict, errors: r.errors, breakCount: r.breakCount })),
     };
   });
-  return NextResponse.json({ monitors, unacknowledged: store.unacknowledgedCount() });
+  return NextResponse.json({
+    monitors,
+    unacknowledged: store.unacknowledgedCount(),
+    scheduler: schedulerStatus(),
+  });
 }
 
 export async function POST(req: NextRequest) {

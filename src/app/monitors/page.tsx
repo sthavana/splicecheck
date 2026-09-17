@@ -69,6 +69,7 @@ function Sparkline({ history }: { history: MonitorRow["history"] }) {
 }
 
 export default function Monitors() {
+  const [scheduler, setScheduler] = useState<{ running: boolean; reason?: string } | null>(null);
   const [monitors, setMonitors] = useState<MonitorRow[]>([]);
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [url, setUrl] = useState("");
@@ -84,6 +85,7 @@ export default function Monitors() {
       fetch("/api/alerts?limit=100").then((r) => r.json()),
     ]);
     setMonitors(m.monitors ?? []);
+    setScheduler(m.scheduler ?? null);
     setAlerts(a.alerts ?? []);
   }, []);
 
@@ -156,6 +158,19 @@ export default function Monitors() {
           ← one-off inspector
         </a>
       </header>
+
+      {scheduler && !scheduler.running && scheduler.reason && (
+        <div className="mb-6 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3">
+          <div className="font-medium text-amber-100">Polling is not running on this deployment</div>
+          <p className="mt-1 text-sm leading-relaxed text-amber-100/70">{scheduler.reason}</p>
+          <p className="mt-2 text-sm leading-relaxed text-amber-100/70">
+            Everything below still works on demand — add a stream and press{" "}
+            <span className="font-mono text-xs">poll now</span> to run a real analysis against it. What
+            will not happen is the part that matters in production: polling on an interval and
+            alerting when a result changes for the worse.
+          </p>
+        </div>
+      )}
 
       <section className="rounded-xl border border-edge bg-panel p-4">
         <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">Add a stream</h2>
