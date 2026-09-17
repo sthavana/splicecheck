@@ -198,18 +198,36 @@ A new monitor's first successful poll establishes a baseline and does not alert
 on pre-existing faults — otherwise adding a stream floods you. A finding that
 occurs in several renditions is one alert, not one per rendition.
 
-**What 90 minutes of live polling taught it.** The first long run produced 55
-alerts for two healthy streams. Three separate causes, all fixed:
+**What live polling taught it.** The first long run produced 55 alerts across
+90 minutes for two healthy streams. Not one described a real fault. Six
+separate causes, each only visible under real traffic:
 
-1. A fault present in four renditions raised four identical alerts.
-2. Live windows sliding across a break boundary produced errors that cleared
-   themselves minutes later, so `VERDICT_DEGRADED` and `ERRORS_CLEARED` traded
-   places ten times over.
-3. Genuine origin blips raised alerts before the two-failure threshold had
-   real data behind it.
+1. A fault present in four renditions raised four identical alerts. One fault
+   is one alert; the rendition count belongs in the detail.
+2. A live window opening part-way through a break leaves a return whose
+   departure has already aged out.
+3. The next departure after such a break then looks nested.
+4. A DATERANGE stays in the playlist until its whole range rolls out, so the
+   oldest one ends up in front of a later segment than it originally preceded
+   and its START-DATE reads early — by a margin that *grows* with every
+   refresh, which is the tell.
+5. Renditions roll independently, so a break near the edge of the shared window
+   can exist in one and not another.
+6. Audio and video are published independently, so the newest period on a live
+   manifest always has a timeline skew until it is complete.
 
-None of these were visible in the test suite until the behaviour they caused
-was understood well enough to write a test for. Both fixes are now covered.
+Together, 2 and 3 made a healthy stream alternate between `pass` and `fail` as
+the window slid across a break boundary, trading `VERDICT_DEGRADED` and
+`ERRORS_CLEARED` ten times over.
+
+The fix is the same shape every time: **suppress at the boundary, keep the rule
+everywhere else.** A window-edge orphan CUE-IN is info; the same orphan after a
+break that paired correctly is still an error. A break near the shared window
+edge is skipped for cross-rendition comparison; one in the middle is not. The
+noise goes away without blinding the tool.
+
+None of this was visible in the test suite until the behaviour was understood
+well enough to write a test for it. All six are now covered.
 
 ## Testing
 

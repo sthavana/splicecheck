@@ -701,8 +701,20 @@ export function analyzeCrossVariant(rends: RenditionAnalysis[]): Finding[] {
     return findings;
   }
 
+  // Renditions roll independently, so near the start of the shared window one
+  // rendition may already have trimmed a break's CUE-OUT while another still
+  // carries it. That break then exists in one and not the other for reasons
+  // that are not a signalling fault. Hold back from the boundary by a couple of
+  // target durations; a genuinely missing break is still caught on the next
+  // poll, once it has moved away from the edge.
+  const targetDurations = rends
+    .map((r) => r.playlist?.targetDuration)
+    .filter((t): t is number => t !== undefined);
+  const grace = Math.max(10_000, (targetDurations.length ? Math.max(...targetDurations) : 6) * 2000);
   const inOverlap = (b: AdBreak) =>
-    !haveWindows || b.pdt === undefined || (b.pdt >= overlapStart && b.pdt <= overlapEnd);
+    !haveWindows ||
+    b.pdt === undefined ||
+    (b.pdt >= overlapStart + grace && b.pdt <= overlapEnd);
 
   // Only breaks that are wholly inside the shared window can be compared: one
   // clipped by the start of a rendition's DVR window, or still open at the live

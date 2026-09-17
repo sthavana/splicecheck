@@ -207,7 +207,11 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
       }
     }
 
-    if (skew > SKEW_INFO) {
+    // The newest period on a live manifest is still being written: audio and
+    // video segments are published independently, so their timelines routinely
+    // differ by a segment or more until the period is complete.
+    const atLiveEdge = live && i === periods.length - 1;
+    if (skew > SKEW_INFO && !atLiveEdge) {
       add(
         skew > SKEW_WARN ? "warning" : "info",
         "AV_DURATION_SKEW",

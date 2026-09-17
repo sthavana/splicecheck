@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { analyzeText } from "../src/lib/runner";
+import { analyzeCrossVariant } from "../src/lib/analyze";
 
 function codes(text: string): Set<string> {
   const r = analyzeText(text, "fixture");
@@ -204,5 +205,44 @@ test("HLS: a DATERANGE claiming a time it does not occupy is still reported", ()
   assert.ok(
     r.renditions[0].findings.some((f) => f.code === "DATERANGE_START_DATE_MISMATCH"),
     "START-DATE 8s after the position it occupies is a real inconsistency",
+  );
+});
+
+test("cross-rendition: a break at the very edge of the shared window is not called missing", () => {
+  // Two renditions of the same stream whose windows have rolled slightly
+  // differently: the older break's CUE-OUT has already gone from one.
+  const head = ["#EXTM3U", "#EXT-X-VERSION:6", "#EXT-X-TARGETDURATION:6"];
+  const withEdgeBreak = [
+    ...head,
+    "#EXT-X-PROGRAM-DATE-TIME:2026-09-17T10:00:00.000Z",
+    "#EXT-X-CUE-OUT:12.0",
+    "#EXTINF:6.000,",
+    "ad_a0.ts",
+    "#EXTINF:6.000,",
+    "ad_a1.ts",
+    "#EXT-X-CUE-IN",
+    "#EXTINF:6.000,",
+    "prog_a.ts",
+  ].join("\n");
+  const withoutIt = [
+    ...head,
+    "#EXT-X-PROGRAM-DATE-TIME:2026-09-17T10:00:00.000Z",
+    "#EXTINF:6.000,",
+    "ad_a0.ts",
+    "#EXTINF:6.000,",
+    "ad_a1.ts",
+    "#EXT-X-CUE-IN",
+    "#EXTINF:6.000,",
+    "prog_a.ts",
+  ].join("\n");
+
+  const a = analyzeText(withEdgeBreak, "a").renditions[0];
+  const b = analyzeText(withoutIt, "b").renditions[0];
+  a.label = "video";
+  b.label = "audio";
+  const cross = analyzeCrossVariant([a, b]);
+  assert.ok(
+    !cross.some((f) => f.code === "VARIANT_MISSING_BREAK"),
+    "window skew between renditions must not read as a missing break",
   );
 });
