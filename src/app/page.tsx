@@ -522,6 +522,9 @@ export default function Home() {
           <a href="/guide" className="text-accent hover:underline">
             how ad insertion works →
           </a>
+          <a href="/streaming" className="text-accent hover:underline">
+            how a stream reaches a viewer →
+          </a>
           <a href="/notes/fifty-five-alerts" className="text-accent hover:underline">
             fifty-five alerts and nothing wrong →
           </a>

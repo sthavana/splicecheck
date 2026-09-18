@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How a stream gets to a viewer</title>
+<meta name="description" content="How video actually reaches a player: the ABR ladder, packaging, HLS, DASH, low latency, origin and CDN — and what goes wrong at each handoff.">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/reading.css">
+<style>
+  /* This page is a reference with a rail, like the ad insertion guide. */
+  .layout { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 56px; align-items: start; }
+  nav.rail { position: sticky; top: 24px; font-family: var(--display); font-size: 13.5px; line-height: 1.45; }
+  nav.rail h2 {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 500; margin: 0 0 14px;
+  }
+  nav.rail ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; counter-reset: rail; }
+  nav.rail a {
+    color: var(--ink-soft); text-decoration: none; display: grid; grid-template-columns: 22px 1fr;
+    gap: 6px; padding-block: 2px; border-left: 2px solid transparent; padding-left: 10px; margin-left: -12px;
+  }
+  nav.rail a::before {
+    counter-increment: rail; content: counter(rail, decimal-leading-zero);
+    font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); padding-top: 2px;
+  }
+  nav.rail a:hover { color: var(--accent); border-left-color: var(--accent); }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; gap: 0; }
+    nav.rail {
+      position: static; border: 1px solid var(--rule); border-radius: 4px;
+      padding: 18px 20px; margin-bottom: 44px; background: var(--surface);
+    }
+    nav.rail ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+<div class="toolbar">
+  <div>
+    <a class="brand" href="/">Splice<span>Check</span></a>
+    <a href="/">Inspector</a>
+    <a href="/compare">Pipeline comparison</a>
+    <a href="/monitors">Monitors</a>
+    <a href="/guide">Ad insertion</a>
+    <a href="/notes/fifty-five-alerts">Fifty-five alerts</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/sthavana/splicecheck">Source</a>
+  </div>
+</div>
+
+<div class="shell wide">
+
+<header class="masthead">
+  <p class="eyebrow">Streaming video · reference</p>
+  <h1>How a stream gets to a viewer</h1>
+  <p class="standfirst">Four systems, four handoffs, and a manifest that is the
+  only thing a player ever sees. What each stage promises — and what it looks
+  like from outside when one of them stops keeping its promise.</p>
+</header>
+
+<div class="layout">
+  <nav class="rail" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+        <li><a href="#1-the-chain-end-to-end">The chain, end to end</a></li>
+        <li><a href="#2-encoding-and-the-abr-ladder">Encoding and the ABR ladder</a></li>
+        <li><a href="#3-packaging">Packaging</a></li>
+        <li><a href="#4-hls">HLS</a></li>
+        <li><a href="#5-dash">DASH</a></li>
+        <li><a href="#6-low-latency">Low latency</a></li>
+        <li><a href="#7-origin-and-cdn">Origin and CDN</a></li>
+        <li><a href="#8-ad-insertion">Ad insertion</a></li>
+        <li><a href="#9-where-it-breaks-a-summary">Where it breaks: a summary</a></li>
+        <li><a href="#further-reading">Further reading</a></li>
+    </ol>
+  </nav>
+
+  <main>
+<p>How video actually reaches a player, one handoff at a time. It assumes you know
+what a video file is and nothing else, and every section closes with what goes
+wrong at that stage.</p>
+<p>Written as background for <a href="https://github.com/sthavana/streampulse">StreamPulse</a>,
+a synthetic health monitor for HLS and DASH. The callouts naming checks —
+<code>period_gap</code>, <code>edge_stale</code> and the rest — refer to that project; they are kept
+here because they say concretely what each failure looks like from outside.
+Ad insertion has its own treatment in <a href="/guide">the ad insertion guide</a>.</p>
+<p>The through-line, if you only read one paragraph: <strong>a stream is a contract
+written in a manifest and honoured by four separate systems.</strong> The encoder
+promises rungs that can be switched between. The packager promises segments
+that exist at the URLs it advertises. The origin promises to keep producing
+them. The CDN promises to hand over what the origin actually said. Every
+outage in this document is one of those four breaking a promise while the
+other three keep theirs, which is why &quot;the stream is down&quot; is never a useful
+sentence on its own.</p>
+<section id="1-the-chain-end-to-end"><h2><span class="sec-num">01</span>The chain, end to end</h2>
+<pre><code>  camera / file            encoder            packager           origin
+  ┌──────────┐      ┌──────────────┐    ┌──────────────┐   ┌──────────┐
+  │ mezzanine│─────▶│ transcode to │───▶│ segment +    │──▶│ serve    │
+  │  SDI/RTP │      │ a ladder of  │    │ write        │   │ manifest │
+  │  / mp4   │      │ renditions   │    │ manifests    │   │ + media  │
+  └──────────┘      └──────────────┘    └──────────────┘   └────┬─────┘
+                       H.264/HEVC/AV1     TS or CMAF             │
+                       AAC/AC-3           HLS and/or DASH        │
+                                                                 ▼
+                                                        ┌─────────────┐
+   ┌────────┐         ┌──────────────┐                  │ origin      │
+   │ player │◀────────│  CDN edge    │◀─────────────────│ shield      │
+   └────────┘         └──────────────┘                  └─────────────┘
+    picks a rung       caches segments long,
+    per segment        manifests briefly
+</code></pre>
+<p>Four handoffs, four places to lie. The player only ever sees the last one, so
+from a player&#39;s vantage a dead encoder, a stuck packager, a failed origin and a
+stale CDN edge all look the same: a manifest that stops changing.</p>
+<p>Distinguishing them from outside is the central problem this tool exists for.</p>
+<hr>
+</section><section id="2-encoding-and-the-abr-ladder"><h2><span class="sec-num">02</span>Encoding and the ABR ladder</h2>
+<h3>Why a ladder exists</h3>
+<p>A viewer on a train and a viewer on fibre cannot be served the same file. Adaptive
+bitrate streaming solves this by encoding the same content several times at
+different bitrates and resolutions — <strong>renditions</strong>, or <strong>rungs</strong> — and letting
+the player switch between them, segment by segment, as its bandwidth estimate
+changes.</p>
+<p>A typical live ladder:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Rung</th>
+<th>Resolution</th>
+<th>Video bitrate</th>
+<th>Profile</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>1920×1080</td>
+<td>5,000 kbps</td>
+<td>High</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1280×720</td>
+<td>3,000 kbps</td>
+<td>Main</td>
+</tr>
+<tr>
+<td>3</td>
+<td>960×540</td>
+<td>1,600 kbps</td>
+<td>Main</td>
+</tr>
+<tr>
+<td>4</td>
+<td>640×360</td>
+<td>800 kbps</td>
+<td>Main</td>
+</tr>
+<tr>
+<td>5</td>
+<td>480×270</td>
+<td>400 kbps</td>
+<td>Baseline</td>
+</tr>
+</tbody></table></div>
+<p>Plus audio, usually once per language rather than once per video rung — audio
+is small and does not need to adapt as aggressively.</p>
+<p>Ladder design is its own discipline. The rungs should be spaced so each step
+is a meaningful bandwidth saving (a rule of thumb is a ratio of about 1.5–2×
+between neighbours); too many rungs wastes encoding cost and confuses ABR
+logic, too few makes switching jarring. <strong>Per-title encoding</strong> goes further and
+picks a ladder per piece of content, since an animated cartoon and a football
+match do not need the same bitrates for the same quality.</p>
+<h3>Transcoding vs transmuxing</h3>
+<p>Two words that get used interchangeably and should not be:</p>
+<ul>
+<li><strong>Transcoding</strong> decodes and re-encodes. The pixels are recompressed. It is
+expensive, lossy, and what produces the ladder.</li>
+<li><strong>Transmuxing</strong> (or repackaging) rewrites the container without touching the
+compressed video. Turning an MPEG-TS segment into an fMP4 segment is a
+transmux: same H.264 bitstream, different box structure. It is cheap and
+lossless.</li>
+</ul>
+<p>Most pipelines transcode once into a mezzanine ladder, then transmux into as
+many delivery formats as they need.</p>
+<h3>The thing that makes switching possible</h3>
+<p>A player switching from rung 2 to rung 3 mid-stream is splicing two different
+encodes together. For that to work without a visible glitch, every rung must be
+<strong>IDR-aligned</strong>: each segment must start with an IDR frame (a keyframe that
+resets all prediction), at <em>exactly</em> the same presentation timestamp in every
+rung.</p>
+<p>This is the single most important constraint in ABR encoding, and it drives
+several others:</p>
+<ul>
+<li><strong>Closed GOPs.</strong> A GOP (group of pictures) that references frames outside
+itself cannot be decoded standalone. Segments must be independently decodable,
+so GOPs must be closed at segment boundaries.</li>
+<li><strong>Fixed GOP length</strong>, or at least a GOP length that divides the segment
+duration. A 2-second segment at 50fps with a 100-frame GOP works; a
+scene-cut-driven adaptive GOP does not, unless the encoder is told to force
+an IDR at segment cadence.</li>
+<li><strong>Identical timebase and PTS</strong> across rungs. All rungs encode the same source
+timeline; if one drifts, switching produces a jump or a freeze.</li>
+<li><strong><code>segmentAlignment=&quot;true&quot;</code></strong> in DASH, which is the packager asserting exactly
+this property.</li>
+</ul>
+<p>If alignment is wrong the stream usually still <em>plays</em>, on most players, most of
+the time — which is why it survives testing and reaches production. What you get
+is occasional frozen frames or audio pops at the moment a player switches rungs,
+on some devices, reported by a fraction of viewers.</p>
+<h3>Codecs</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Video</th>
+<th>Audio</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Universal</td>
+<td>H.264 / AVC</td>
+<td>AAC-LC</td>
+</tr>
+<tr>
+<td>Efficient</td>
+<td>HEVC / H.265 (~40% better, licensing complexity)</td>
+<td>HE-AAC, xHE-AAC</td>
+</tr>
+<tr>
+<td>Newer</td>
+<td>AV1 (royalty-free, encoder cost high)</td>
+<td>Opus</td>
+</tr>
+<tr>
+<td>Broadcast</td>
+<td>—</td>
+<td>AC-3, E-AC-3 (Dolby Digital)</td>
+</tr>
+</tbody></table></div>
+<p>The <code>CODECS</code> attribute in HLS and <code>@codecs</code> in DASH carry an RFC 6381 string —
+<code>avc1.640028</code>, <code>mp4a.40.2</code>, <code>hvc1.1.6.L93.B0</code> — which tells a player whether it
+can decode a rung <em>before fetching any of it</em>. Getting it wrong, or omitting it,
+means the player either fetches something it cannot play or skips something it
+could.</p>
+<h3>What goes wrong here</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>What is actually wrong</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Glitch on rung switch</td>
+<td>IDR misalignment between renditions</td>
+</tr>
+<tr>
+<td>Rung plays on desktop, not on TV</td>
+<td><code>CODECS</code> string wrong, or profile/level above the device&#39;s capability</td>
+</tr>
+<tr>
+<td>One rung is black or absent</td>
+<td>Encoder instance died; the manifest still advertises it</td>
+</tr>
+<tr>
+<td>Declared 1080p, delivered 720p</td>
+<td>Ladder misconfiguration, or a rung mapped to the wrong output</td>
+</tr>
+</tbody></table></div>
+<div class="xref"><span class="tag">In StreamPulse</span><p><code>resolution_mismatch</code> and <code>codec_mismatch</code> compare what the
+manifest declares against what ffprobe finds in the actual media;
+<code>audio_track_missing</code> / <code>video_track_missing</code> catch a declared track that is not
+in the bytes; <code>black_frames</code> and <code>frozen_video</code> catch a rung that is technically
+delivering and showing nothing. These need the <a href="https://github.com/sthavana/streampulse#looking-inside-the-media-optional">optional
+inspection</a> build.</p></div>
+<hr>
+</section><section id="3-packaging"><h2><span class="sec-num">03</span>Packaging</h2>
+<p>The packager takes encoded elementary streams and produces (a) media segments
+and (b) manifests describing them.</p>
+<h3>Containers: TS and CMAF</h3>
+<p><strong>MPEG-TS</strong> is the older option, inherited from broadcast. A 188-byte packet
+structure with PIDs, PAT/PMT tables, continuity counters and PCR timestamps.
+Robust over lossy transports, wasteful over HTTP (about 10–15% overhead), and
+still the only thing some legacy devices accept.</p>
+<p><strong>fMP4 / CMAF</strong> is the modern one. ISO Base Media File Format, fragmented: an
+initialisation segment carrying <code>ftyp</code> and <code>moov</code> (the codec configuration and
+track metadata), then media segments each carrying <code>moof</code> + <code>mdat</code> pairs. Lower
+overhead, required for HEVC in HLS, and — the important part — <strong>the same
+segments can serve both HLS and DASH</strong>.</p>
+<p>That convergence is what CMAF is for. Before it, serving both protocols meant
+packaging everything twice and storing it twice. With CMAF you write one set of
+segments and two manifests over them:</p>
+<pre><code>        /video_1080p/init.mp4
+        /video_1080p/1.m4s, 2.m4s, 3.m4s …
+             ▲                        ▲
+             │                        │
+      master.m3u8              manifest.mpd
+      (HLS view)               (DASH view)
+</code></pre>
+<p>An <strong>initialisation segment</strong> is required to decode anything: it carries the SPS
+and PPS for H.264, the decoder configuration, the timescale. Fetch a media
+segment without it and you have bytes you cannot decode. It is referenced by
+<code>EXT-X-MAP</code> in HLS and <code>&lt;Initialization&gt;</code> in DASH, and it is small, cacheable
+forever, and catastrophic when missing — playback cannot start at all, on any
+rung.</p>
+<h3>Segment duration</h3>
+<p>The defining trade-off of the whole system:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Duration</th>
+<th>Latency</th>
+<th>Overhead</th>
+<th>Playlist size</th>
+<th>CDN efficiency</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1–2 s</td>
+<td>Low</td>
+<td>High (more requests, more IDRs)</td>
+<td>Large</td>
+<td>Worse</td>
+</tr>
+<tr>
+<td>4 s</td>
+<td>Balanced</td>
+<td>Balanced</td>
+<td>Balanced</td>
+<td>Good</td>
+</tr>
+<tr>
+<td>6–10 s</td>
+<td>High</td>
+<td>Low</td>
+<td>Small</td>
+<td>Best</td>
+</tr>
+</tbody></table></div>
+<p>Latency is roughly <em>segment duration × player buffer depth</em>, and players
+typically buffer three segments before starting. Six-second segments therefore
+mean roughly 18–30 seconds behind live before anything else goes wrong. Two-second
+segments get you to 6–10 seconds at the cost of three times the request rate.
+Going below that requires the <a href="#6-low-latency">low-latency</a> machinery, which is
+a different mechanism rather than more of the same.</p>
+<p>More IDRs also costs quality: keyframes are expensive, so a 1-second segment at
+a fixed bitrate has measurably worse picture than a 6-second one.</p>
+<h3>Static vs just-in-time packaging</h3>
+<ul>
+<li><strong>Static</strong>: segments written to storage ahead of time. Cheap to serve, storage
+cost multiplies by the number of formats, and changing anything means
+repackaging.</li>
+<li><strong>Just-in-time (JIT)</strong>: the origin holds one mezzanine format and packages on
+request, usually with its own cache. One copy stored, more CPU per request,
+and a cache miss storm can take the origin down.</li>
+</ul>
+<p>JIT is why some origins are slow on first request and fast thereafter, and why
+<code>segment_availability</code> failures sometimes correlate with cache misses rather
+than with anything being genuinely absent.</p>
+<h3>DRM</h3>
+<p>Encryption happens at packaging time. Two layers to keep separate:</p>
+<ul>
+<li><strong>The encryption scheme</strong> — how the bytes are encrypted. <code>cenc</code> (AES-CTR) and
+<code>cbcs</code> (AES-CBC with pattern encryption) are the two CENC schemes. They are
+not interchangeable: FairPlay requires <code>cbcs</code>, which is why <code>cbcs</code> has become
+the de facto choice for CMAF.</li>
+<li><strong>The DRM system</strong> — who issues the key. Widevine (Google/Android/Chrome),
+PlayReady (Microsoft/Xbox/Smart TVs), FairPlay (Apple). Serving all three from
+one set of segments is <strong>multi-DRM</strong>, and works because the segments are
+encrypted once under one key, with each system given its own way to deliver
+that key.</li>
+</ul>
+<p>The manifest carries the initialisation data a player needs to <em>request</em> a
+licence, not the key itself:</p>
+<ul>
+<li><strong>HLS</strong>: <code>EXT-X-KEY</code> with <code>METHOD</code>, <code>URI</code>, <code>KEYFORMAT</code>. For AES-128 the URI is
+a fetchable key. For FairPlay it is a <code>skd://</code> URI handed to the platform.</li>
+<li><strong>DASH</strong>: <code>&lt;ContentProtection&gt;</code> elements — one for the scheme
+(<code>urn:mpeg:dash:mp4protection:2011</code> carrying <code>@cenc:default_KID</code>) and one per
+DRM system, each with a <code>&lt;cenc:pssh&gt;</code> box.</li>
+</ul>
+<p><strong>Key rotation</strong> changes the content key periodically so a leaked key is worth
+only a window rather than the whole stream. It is the security feature most
+likely to fail silently: everything keeps playing when rotation stops, because
+the old key still works.</p>
+<h3>What goes wrong here</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>What is actually wrong</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Nothing plays, any rung</td>
+<td>Init segment missing or 404</td>
+</tr>
+<tr>
+<td>Plays on Apple, not elsewhere (or vice versa)</td>
+<td>Wrong encryption scheme for the DRM system</td>
+</tr>
+<tr>
+<td>Licence requests fail</td>
+<td>Malformed PSSH, or <code>default_KID</code> not matching the media</td>
+</tr>
+<tr>
+<td>Stream plays unencrypted</td>
+<td>Packager lost its DRM config; clear segments on a protected stream</td>
+</tr>
+<tr>
+<td>Rebuffering on a healthy CDN</td>
+<td>A segment longer than the declared maximum; buffers sized wrong</td>
+</tr>
+</tbody></table></div>
+<div class="xref"><span class="tag">In StreamPulse</span><p><code>init_segment_availability</code>, <code>map_missing_uri</code>,
+<code>unexpected_clear_segments</code>, <code>pssh_malformed</code>, <code>pssh_empty</code>, <code>kid_invalid</code>,
+<code>key_fetch</code>, <code>key_size_invalid</code>, <code>key_rotation_stalled</code>,
+<code>segment_duration_violation</code>, <code>targetduration_violation</code>.</p></div>
+<hr>
+</section><section id="4-hls"><h2><span class="sec-num">04</span>HLS</h2>
+<p>Apple&#39;s format, originally RFC 8216, now maintained as the HLS specification
+with regular revisions. Two levels of playlist, both plain text, both UTF-8,
+both beginning <code>#EXTM3U</code>.</p>
+<h3>The master playlist</h3>
+<p>Lists the rungs and the alternative tracks. It is fetched once (or occasionally
+refetched) and contains no media.</p>
+<pre><code class="language-m3u8">#EXTM3U
+#EXT-X-VERSION:7
+
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=&quot;aac&quot;,NAME=&quot;English&quot;,LANGUAGE=&quot;en&quot;,
+             DEFAULT=YES,AUTOSELECT=YES,URI=&quot;audio/en/index.m3u8&quot;
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=&quot;aac&quot;,NAME=&quot;German&quot;,LANGUAGE=&quot;de&quot;,
+             DEFAULT=NO,AUTOSELECT=YES,URI=&quot;audio/de/index.m3u8&quot;
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=&quot;subs&quot;,NAME=&quot;English&quot;,LANGUAGE=&quot;en&quot;,
+             DEFAULT=NO,URI=&quot;subs/en/index.m3u8&quot;
+
+#EXT-X-STREAM-INF:BANDWIDTH=5200000,AVERAGE-BANDWIDTH=4800000,
+                  RESOLUTION=1920x1080,CODECS=&quot;avc1.640028,mp4a.40.2&quot;,
+                  FRAME-RATE=50.000,AUDIO=&quot;aac&quot;,SUBTITLES=&quot;subs&quot;
+video/1080p/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=3200000,RESOLUTION=1280x720,
+                  CODECS=&quot;avc1.4d401f,mp4a.40.2&quot;,AUDIO=&quot;aac&quot;,SUBTITLES=&quot;subs&quot;
+video/720p/index.m3u8
+</code></pre>
+<p>Points worth knowing:</p>
+<ul>
+<li><strong><code>BANDWIDTH</code> is the peak</strong>, not the average — it must be an upper bound on
+the rung&#39;s bitrate over any segment, because the player uses it to decide
+whether the rung fits the connection. <code>AVERAGE-BANDWIDTH</code> is optional and
+advisory.</li>
+<li><strong><code>AUDIO=&quot;aac&quot;</code> is a reference, not a definition.</strong> It points at a <code>GROUP-ID</code>
+that <code>EXT-X-MEDIA</code> lines must declare. A variant referencing a group that does
+not exist is a dangling pointer: the player has video and no sound.</li>
+<li><strong>Demuxed vs muxed.</strong> If audio is in a separate <code>EXT-X-MEDIA</code> rendition, the
+video playlists contain video only, even though their <code>CODECS</code> string usually
+still lists the audio codec — because <code>CODECS</code> describes what the <em>presentation</em>
+needs, not what that one playlist contains. This trips up naive validators
+constantly.</li>
+<li><strong><code>DEFAULT=YES</code> must appear at most once per group.</strong> Two defaults means the
+player picks arbitrarily, and different players pick differently.</li>
+</ul>
+<h3>The media playlist</h3>
+<p>One per rung, and the thing that changes as a live stream progresses.</p>
+<pre><code class="language-m3u8">#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-TARGETDURATION:4
+#EXT-X-MEDIA-SEQUENCE:1547
+#EXT-X-PROGRAM-DATE-TIME:2026-09-18T10:14:32.000Z
+#EXT-X-MAP:URI=&quot;init.mp4&quot;
+#EXTINF:4.000,
+seg1547.m4s
+#EXTINF:4.000,
+seg1548.m4s
+#EXTINF:4.000,
+seg1549.m4s
+</code></pre>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Tag</th>
+<th>Means</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>EXT-X-TARGETDURATION</code></td>
+<td>The maximum segment duration, rounded to an integer. Mandatory. Players use it to decide how often to reload. <strong>No segment may exceed it.</strong></td>
+</tr>
+<tr>
+<td><code>EXT-X-MEDIA-SEQUENCE</code></td>
+<td>The sequence number of the first segment listed. Increments as the window slides.</td>
+</tr>
+<tr>
+<td><code>EXTINF</code></td>
+<td>This segment&#39;s exact duration, fractional.</td>
+</tr>
+<tr>
+<td><code>EXT-X-MAP</code></td>
+<td>The initialisation segment. Required for fMP4.</td>
+</tr>
+<tr>
+<td><code>EXT-X-PROGRAM-DATE-TIME</code></td>
+<td>Wall-clock time of the next segment&#39;s first sample. Optional but the only way to relate media time to real time.</td>
+</tr>
+<tr>
+<td><code>EXT-X-ENDLIST</code></td>
+<td>The playlist is complete — this is VOD, or a live stream that has ended. Its presence means the player stops reloading.</td>
+</tr>
+<tr>
+<td><code>EXT-X-DISCONTINUITY</code></td>
+<td>Timeline, codec or timestamp discontinuity follows. Ad breaks, source switches.</td>
+</tr>
+<tr>
+<td><code>EXT-X-KEY</code></td>
+<td>Encryption parameters for subsequent segments.</td>
+</tr>
+</tbody></table></div>
+<p><strong>How live works.</strong> There is no &quot;live&quot; flag. A playlist is live if it lacks
+<code>EXT-X-ENDLIST</code>. The player reloads it every target duration; each reload the
+packager has appended a segment and, once the window is full, dropped the oldest
+and incremented <code>EXT-X-MEDIA-SEQUENCE</code>. The window is typically 3–10 segments for
+low latency or hours for a DVR.</p>
+<p><strong>The three ways to tell it has stopped:</strong></p>
+<ol>
+<li><code>EXT-X-MEDIA-SEQUENCE</code> stops incrementing — the window is not sliding.</li>
+<li>The playlist is byte-identical poll after poll.</li>
+<li><code>PROGRAM-DATE-TIME</code> projected to the end of the window falls behind wall clock.</li>
+</ol>
+<p>The third is the most sensitive and the only one that catches an encoder that is
+falling behind while still publishing. It is also the only one that needs the
+packager to have emitted PDT at all.</p>
+<h3>What goes wrong here</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>What is actually wrong</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Stream frozen on the last frame</td>
+<td>Media sequence not advancing; packager stopped</td>
+</tr>
+<tr>
+<td>Playback jumps backwards</td>
+<td>Sequence went backwards — an origin failover to a lagging instance</td>
+</tr>
+<tr>
+<td>Player stops after one segment</td>
+<td><code>EXT-X-ENDLIST</code> on a live stream</td>
+</tr>
+<tr>
+<td>Video, no audio</td>
+<td><code>AUDIO</code> group referenced but no <code>EXT-X-MEDIA</code> declares it</td>
+</tr>
+<tr>
+<td>Rebuffer on a healthy connection</td>
+<td><code>EXTINF</code> exceeding <code>EXT-X-TARGETDURATION</code></td>
+</tr>
+<tr>
+<td>Stream drifts further behind live all day</td>
+<td>Encoder slower than real time; PDT falls behind wall clock</td>
+</tr>
+</tbody></table></div>
+<div class="xref"><span class="tag">In StreamPulse</span><p><code>playlist_stalled</code>, <code>playlist_rollback</code>, <code>unexpected_endlist</code>,
+<code>rendition_group_missing</code>, <code>rendition_duplicate_name</code>,
+<code>rendition_multiple_default</code>, <code>closed_captions_with_uri</code>,
+<code>targetduration_violation</code>, <code>targetduration_missing</code>, <code>pdt_stale</code>,
+<code>pdt_not_advancing</code>, <code>short_window</code>, <code>no_segments</code>, <code>segment_availability</code>.</p></div>
+<hr>
+</section><section id="5-dash"><h2><span class="sec-num">05</span>DASH</h2>
+<p>ISO/IEC 23009-1. One XML document — the MPD, Media Presentation Description —
+describing the entire presentation, rather than HLS&#39;s tree of playlists. That
+single difference drives most of the others: a DASH player fetches one document
+and knows everything, where an HLS player fetches a master playlist and then one
+media playlist per rung it cares about.</p>
+<h3>Structure</h3>
+<pre><code>MPD  @type=dynamic|static  @availabilityStartTime  @timeShiftBufferDepth
+ └── Period  @id @start @duration              (an ad break opens a new one)
+      └── AdaptationSet  @contentType @lang    (one track: video, one language)
+           └── Representation  @id @bandwidth  (one rung)
+                └── SegmentTemplate / SegmentList / SegmentBase
+</code></pre>
+<ul>
+<li><strong>Period</strong> is a time span of the presentation. Most live streams have one,
+until an ad break splits them.</li>
+<li><strong>AdaptationSet</strong> groups interchangeable Representations — the video ladder is
+one set, each audio language another.</li>
+<li><strong>Representation</strong> is a rung, identified by <code>@id</code>, which is also what
+<code>$RepresentationID$</code> in a template expands to.</li>
+</ul>
+<p>Attributes are <strong>inherited downwards</strong>: <code>@mimeType</code>, <code>@codecs</code>, <code>@width</code> and the
+segment-addressing elements can be declared at any level and apply to everything
+beneath. A parser that does not fold inheritance will see half the manifest as
+empty.</p>
+<h3>Segment addressing: the four ways</h3>
+<p>This is where DASH&#39;s complexity concentrates, and where most implementation bugs
+live.</p>
+<p><strong>1. SegmentTemplate with <code>$Number$</code></strong> — segments are numbered arithmetically.</p>
+<pre><code class="language-xml">&lt;SegmentTemplate media=&quot;v/$RepresentationID$/$Number%05d$.m4s&quot;
+                 initialization=&quot;v/$RepresentationID$/init.mp4&quot;
+                 duration=&quot;96000&quot; timescale=&quot;24000&quot; startNumber=&quot;1&quot;/&gt;
+</code></pre>
+<p>Segment <em>n</em> covers presentation time <code>(n − startNumber) × duration / timescale</code>.
+The manifest is a formula, not a list: it does not change as the stream
+progresses, and the player computes which segment should exist right now from its
+own clock. Cheap — the MPD can be cached for a long time — and it means <strong>the
+manifest cannot tell you the stream has stopped</strong>, because the formula keeps
+producing plausible URLs forever.</p>
+<p><strong>2. SegmentTemplate with <code>$Time$</code> and a SegmentTimeline</strong> — segments are listed.</p>
+<pre><code class="language-xml">&lt;SegmentTemplate media=&quot;v/$RepresentationID$/$Time$.m4s&quot; timescale=&quot;48000&quot;&gt;
+  &lt;SegmentTimeline&gt;
+    &lt;S t=&quot;85884561024000&quot; d=&quot;96256&quot; r=&quot;2&quot;/&gt;
+    &lt;S d=&quot;95232&quot;/&gt;
+    &lt;S d=&quot;96256&quot; r=&quot;4&quot;/&gt;
+  &lt;/SegmentTimeline&gt;
+&lt;/SegmentTemplate&gt;
+</code></pre>
+<p><code>@t</code> is the start time in timescale units, <code>@d</code> the duration, <code>@r</code> the number of
+<em>additional</em> repeats (<code>r=&quot;2&quot;</code> means three segments). <code>@r=&quot;-1&quot;</code> means repeat until
+the next <code>&lt;S&gt;</code> or the end of the period. Only the first <code>&lt;S&gt;</code> usually carries
+<code>@t</code>; the rest continue from where the last one ended.</p>
+<p>The timeline handles variable segment durations — unavoidable with ad breaks or
+variable frame rates — and, unlike <code>$Number$</code>, <strong>the manifest states where the
+live edge is</strong>, so a frozen packager produces a byte-identical timeline. That is
+what makes freeze detection possible on timeline-addressed streams and impossible
+on number-addressed ones.</p>
+<p>A run whose <code>@t</code> does not continue where the previous run ended is a <strong>hole in
+the timeline</strong>: media time that no segment covers. Players stall or skip there.</p>
+<p><strong>3. SegmentList</strong> — every URL enumerated explicitly. Verbose, rare, used for
+short VOD.</p>
+<p><strong>4. SegmentBase</strong> — one file per Representation with an index (<code>sidx</code>) box, and
+byte-range requests into it. Common for VOD; the init data is a byte range at the
+front rather than a separate file.</p>
+<h3>Live: the clock is the mechanism</h3>
+<p>A <code>@type=&quot;dynamic&quot;</code> MPD has no sliding window in the HLS sense. Instead:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Means</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>@availabilityStartTime</code></td>
+<td>Wall-clock time corresponding to presentation time zero. Everything is computed from this.</td>
+</tr>
+<tr>
+<td><code>@timeShiftBufferDepth</code></td>
+<td>How far back seeking is guaranteed to work — the DVR promise.</td>
+</tr>
+<tr>
+<td><code>@minimumUpdatePeriod</code></td>
+<td>How often a player should re-fetch the MPD. Zero means every segment.</td>
+</tr>
+<tr>
+<td><code>@publishTime</code></td>
+<td>When this version of the MPD was generated.</td>
+</tr>
+<tr>
+<td><code>@maxSegmentDuration</code></td>
+<td>Upper bound on any segment; players size buffers from it.</td>
+</tr>
+<tr>
+<td><code>@suggestedPresentationDelay</code></td>
+<td>How far behind live the packager suggests playing.</td>
+</tr>
+</tbody></table></div>
+<p>The live edge is therefore <code>now − availabilityStartTime</code>, adjusted for the
+period&#39;s start. A player computes which segments exist from its own clock, which
+is why <strong>clock skew is a first-class failure mode in DASH</strong> and why <code>UTCTiming</code>
+exists: it tells the player whose clock to trust.</p>
+<h3>What goes wrong here</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>What is actually wrong</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Stall at a fixed point every time</td>
+<td>Hole in the SegmentTimeline</td>
+</tr>
+<tr>
+<td>Stall exactly when an ad starts</td>
+<td>Gap or overlap at a period boundary; SSAI arithmetic wrong</td>
+</tr>
+<tr>
+<td>Seeking back fails despite a long DVR</td>
+<td>Window shorter than <code>@timeShiftBufferDepth</code> claims</td>
+</tr>
+<tr>
+<td>One rung serves another&#39;s media</td>
+<td>Two Representations sharing an <code>@id</code></td>
+</tr>
+<tr>
+<td>Player has no audio to select</td>
+<td>AdaptationSet declared with no Representations</td>
+</tr>
+<tr>
+<td>Every viewer a different distance behind live</td>
+<td>No <code>UTCTiming</code>; each player trusting its own clock</td>
+</tr>
+<tr>
+<td>Nothing plays on some devices</td>
+<td><code>@codecs</code> or <code>@mimeType</code> missing, so capability cannot be determined</td>
+</tr>
+</tbody></table></div>
+<div class="xref"><span class="tag">In StreamPulse</span><p><code>timeline_gap</code>, <code>timeline_overlap</code>, <code>period_gap</code>,
+<code>period_overlap</code>, <code>window_below_declared</code>, <code>representation_duplicate_id</code>,
+<code>dependency_missing</code>, <code>adaptation_set_empty</code>, <code>period_empty</code>,
+<code>adaptation_set_multiple_main</code>, <code>representation_missing_mime</code>,
+<code>representation_missing_codecs</code>, <code>segment_duration_violation</code>,
+<code>utc_timing_missing</code>, <code>unexpected_static</code>, <code>edge_stale</code>, <code>playlist_stalled</code>,
+<code>playlist_rollback</code>.</p></div>
+<hr>
+</section><section id="6-low-latency"><h2><span class="sec-num">06</span>Low latency</h2>
+<p>Standard HLS and DASH put a viewer 15–45 seconds behind live. Broadcast is
+around 5. For sport and betting that gap is the product, so both formats grew a
+low-latency mode — and both work the same way underneath, by <strong>letting a player
+fetch part of a segment before the segment is finished</strong>.</p>
+<h3>Where the latency actually is</h3>
+<pre><code>encoder    packager    origin    CDN     player buffer
+ 1-2s        0.5s       0.1s     0.2s     3 × segment duration   ← the big one
+</code></pre>
+<p>The player buffer dominates, and it is a function of segment duration. You
+cannot fix it by making segments shorter forever — at some point the request
+overhead and the keyframe cost dominate. So instead you keep 4-second segments
+and deliver them in pieces as they are produced.</p>
+<h3>The enabling trick: chunked transfer</h3>
+<p>A CMAF segment is a sequence of <strong>chunks</strong>, each a <code>moof</code> + <code>mdat</code> pair, each
+independently deliverable. The packager writes chunks as the encoder produces
+them, and the origin responds to a request for the not-yet-finished segment with
+HTTP <strong>chunked transfer encoding</strong> — sending each chunk as it lands, keeping the
+response open.</p>
+<p>The player therefore starts decoding a segment that is still being written.</p>
+<p>This is also the one that fails invisibly. If any hop — the origin, a CDN edge,
+a reverse proxy — buffers the whole response before forwarding it, everything
+still works: the manifest is correct, every segment serves, players play. They
+just play seconds behind where the design says. Nothing 404s, no check on
+availability or freshness fires, and the entire low-latency investment is inert.</p>
+<p><strong>The tell:</strong> a response carrying a <code>Content-Length</code> for a segment that is still
+being produced. A segment still being written cannot have a known length, so a
+<code>Content-Length</code> on one proves something waited for the whole thing.</p>
+<h3>LL-HLS</h3>
+<p>Apple&#39;s version adds <strong>partial segments</strong>:</p>
+<pre><code class="language-m3u8">#EXT-X-SERVER-CONTROL:CAN-BLOCK-RELOAD=YES,PART-HOLD-BACK=1.020,
+                      CAN-SKIP-UNTIL=24.0
+#EXT-X-PART-INF:PART-TARGET=0.340
+...
+#EXTINF:4.00000,
+seg1547.m4s
+#EXT-X-PART:DURATION=0.34000,URI=&quot;seg1548.0.m4s&quot;
+#EXT-X-PART:DURATION=0.34000,URI=&quot;seg1548.1.m4s&quot;
+#EXT-X-PART:DURATION=0.34000,URI=&quot;seg1548.2.m4s&quot;,INDEPENDENT=YES
+#EXT-X-PRELOAD-HINT:TYPE=PART,URI=&quot;seg1548.3.m4s&quot;
+</code></pre>
+<ul>
+<li><strong><code>EXT-X-PART</code></strong> lines expose the pieces of the in-progress segment.</li>
+<li><strong><code>EXT-X-PRELOAD-HINT</code></strong> names the next part before it exists; the player
+requests it and the origin holds the response open until it does.</li>
+<li><strong>Blocking playlist reload</strong> (<code>CAN-BLOCK-RELOAD=YES</code>): the player asks for the
+playlist <em>as of</em> a future part, and the origin holds the request rather than
+returning a stale copy. This removes polling latency entirely.</li>
+<li><strong><code>PART-HOLD-BACK</code></strong> tells the player how close to the edge it may play —
+at least three part durations.</li>
+<li><strong>Delta playlists</strong> (<code>CAN-SKIP-UNTIL</code>) let a player request only the changed
+tail, because a full DVR playlist re-sent every 340ms is a lot of bytes.</li>
+</ul>
+<h3>LL-DASH</h3>
+<p>DASH keeps the same MPD and adds three attributes:</p>
+<ul>
+<li><strong><code>@availabilityTimeOffset</code></strong> on the SegmentTemplate: how much <em>earlier</em> than
+its nominal completion a segment becomes fetchable. This is what says &quot;start
+requesting this before it exists.&quot;</li>
+<li><strong><code>@availabilityTimeComplete=&quot;false&quot;</code></strong>: the segment is available before it is
+complete. Together these two are the declaration of chunked delivery.</li>
+<li><strong><code>&lt;ServiceDescription&gt;&lt;Latency target=&quot;3000&quot; min=&quot;2000&quot; max=&quot;6000&quot;/&gt;</code></strong>: the
+latency the operator is aiming for, in milliseconds, plus a <code>&lt;PlaybackRate&gt;</code>
+range letting the player speed up slightly to catch up.</li>
+</ul>
+<p>And <code>UTCTiming</code> becomes essential rather than advisory. At a three-second target
+a few seconds of clock drift is the entire budget, and without a stated time
+source every viewer is guessing from their own device clock.</p>
+<h3>What goes wrong here</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>What is actually wrong</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Latency is 15s on a 3s-target stream</td>
+<td>Something is buffering whole segments; chunked delivery is not happening</td>
+</tr>
+<tr>
+<td>Latency varies wildly per viewer</td>
+<td>No <code>UTCTiming</code>; players using their own clocks</td>
+</tr>
+<tr>
+<td>Players stall at the edge then recover</td>
+<td>Playing too close to the edge; <code>PART-HOLD-BACK</code> too small or ignored</td>
+</tr>
+<tr>
+<td>Works direct from origin, not via CDN</td>
+<td>The CDN is not configured to pass through chunked responses</td>
+</tr>
+</tbody></table></div>
+<div class="xref"><span class="tag">In StreamPulse</span><p><code>chunked_delivery_missing</code> (the <code>Content-Length</code> tell, run
+against a segment that is genuinely still in production), <code>utc_timing_missing</code>,
+and <code>edge_stale</code> measured from segment completion rather than availability — so
+a low-latency stream is not flattered by its own <code>@availabilityTimeOffset</code>.</p></div>
+<hr>
+</section><section id="7-origin-and-cdn"><h2><span class="sec-num">07</span>Origin and CDN</h2>
+<h3>What sits where</h3>
+<ul>
+<li><strong>Origin</strong> serves manifests and segments. Either a packager producing them
+just-in-time, or storage holding pre-packaged output.</li>
+<li><strong>Origin shield / mid-tier</strong>: a single caching layer in front of the origin so
+that a hundred edge nodes missing simultaneously produce one origin request,
+not a hundred. The thing that stops a popular stream from killing its own
+origin.</li>
+<li><strong>Edge</strong>: the node the viewer actually talks to. Hundreds of them, each with
+an independent cache.</li>
+</ul>
+<p>The critical consequence: <strong>there is no single &quot;the CDN&quot;.</strong> Two requests seconds
+apart can land on different edges with different cache states, which is why a
+stream can look fine from one place and broken from another, and why the same
+probe can see an edge one segment behind the one it saw a moment ago.</p>
+<h3>Caching policy</h3>
+<p>Manifests and segments want opposite treatment:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>TTL</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Live manifest</td>
+<td>1–2 s, or the segment duration</td>
+<td>It changes constantly; a stale one freezes the stream</td>
+</tr>
+<tr>
+<td>Segment</td>
+<td>Hours to forever</td>
+<td>Immutable once written; identified by a unique URL</td>
+</tr>
+<tr>
+<td>Init segment</td>
+<td>Forever</td>
+<td>Never changes</td>
+</tr>
+<tr>
+<td>VOD manifest</td>
+<td>Minutes to hours</td>
+<td>Never changes after publication</td>
+</tr>
+</tbody></table></div>
+<p>Getting the manifest TTL wrong is the classic CDN misconfiguration: cache a live
+manifest for 60 seconds and every viewer sees a stream that advances in
+60-second jumps, while the origin is perfectly healthy.</p>
+<h3>The headers that matter</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Header</th>
+<th>What it tells you</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Age</code></td>
+<td>Seconds since the origin generated this response, as the caches in between report it. <strong>The reliable one.</strong></td>
+</tr>
+<tr>
+<td><code>Cache-Control</code></td>
+<td><code>max-age</code> for browsers, <code>s-maxage</code> for shared caches; <code>stale-while-revalidate</code> allows serving stale while refreshing</td>
+</tr>
+<tr>
+<td><code>X-Cache</code>, <code>CF-Cache-Status</code>, <code>X-Cache-Status</code></td>
+<td>HIT / MISS / STALE — vendor-specific spelling, and there are many</td>
+</tr>
+<tr>
+<td><code>Last-Modified</code> / <code>ETag</code></td>
+<td>Enables conditional requests</td>
+</tr>
+</tbody></table></div>
+<p>A CDN chain reports its layers in order, shield first: <code>X-Cache: HIT, MISS</code>
+means the shield had it and the edge did not — or the other way round, depending
+on the vendor. <strong>The element nearest the client is the one that served you.</strong></p>
+<h3>Why this is the hardest fault to attribute</h3>
+<p>A frozen manifest can mean:</p>
+<ol>
+<li>The encoder died.</li>
+<li>The packager died or lost its input.</li>
+<li>The origin is failing and a load balancer is serving an old copy.</li>
+<li>A CDN edge has a stale object and is not revalidating.</li>
+</ol>
+<p>From outside, all four produce identical bytes. And the fourth is <em>still a real
+viewer-facing outage</em> — everyone hitting that edge sees a frozen stream — so
+&quot;bypass the cache and check the origin&quot; answers the wrong question. You need to
+know which, because they are different teams and different fixes.</p>
+<p><code>Age</code> is what separates them. If the response is younger than the freeze, the
+origin generated this frozen manifest just now, and the problem is upstream of
+the CDN. If <code>Age</code> is at least as old as the freeze, one stale cached object
+accounts for everything observed and the origin may be perfectly healthy behind
+it.</p>
+<p>Better still, treat it as a split rather than a verdict: of an observed lag of
+<em>L</em>, exactly <code>Age</code> seconds is cache and the remaining <code>L − Age</code> is how far behind
+the packager already was when it generated that manifest.</p>
+<pre><code>&quot;live edge is 306s behind wall-clock [cache: Age 300s, HIT
+ — the packager was 6s behind when this was generated; the rest is cache age]&quot;
+</code></pre>
+<p>A threshold comparing <code>Age</code> to the lag would call that one &quot;fresher than the
+lag&quot; and blame the packager, when 98% of it is cache. This is not hypothetical:
+it is what the first version of this check did.</p>
+<h3>Other CDN-layer faults</h3>
+<ul>
+<li><strong>Token authentication</strong>: signed URLs with an expiry. Clock skew between the
+signer and the validator rejects valid requests; a misconfigured TTL rejects
+them after N minutes of playback.</li>
+<li><strong>Multi-CDN steering</strong>: DNS or manifest-level switching between providers. A
+probe hitting one CDN says nothing about the other, which is why vantage
+labelling matters.</li>
+<li><strong>Geo and rate limiting</strong>: a probe polling aggressively gets rate-limited, and
+the resulting 429 looks like an outage. (This happened during development here,
+which is why the demo polls politely.)</li>
+<li><strong>Range request support</strong>: required for <code>SegmentBase</code> DASH and <code>EXT-X-MAP</code>
+byte ranges. A cache that mishandles ranges breaks those and nothing else.</li>
+</ul>
+<h3>What goes wrong here</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>What is actually wrong</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Stream advances in jumps</td>
+<td>Manifest cached too long</td>
+</tr>
+<tr>
+<td>Frozen for some viewers, fine for others</td>
+<td>One edge stale; the others fine</td>
+</tr>
+<tr>
+<td>Everything 403s after a while</td>
+<td>Token expiry or clock skew</td>
+</tr>
+<tr>
+<td>Fine from the office, broken for viewers</td>
+<td>Different edge, different region, different CDN</td>
+</tr>
+<tr>
+<td>High TTFB on first play, fine after</td>
+<td>Cache miss reaching a JIT origin</td>
+</tr>
+</tbody></table></div>
+<div class="xref"><span class="tag">In StreamPulse</span><p>cache attribution on every manifest finding, <code>manifest_fetch</code>,
+<code>segment_availability</code>, <code>manifest_age_seconds</code> as a metric, and the
+<a href="https://github.com/sthavana/streampulse#multi-vantage">vantage</a> label so the same channel probed from two
+regions produces two independent answers rather than overwriting each other.</p></div>
+<hr>
+</section><section id="8-ad-insertion"><h2><span class="sec-num">08</span>Ad insertion</h2>
+<p>Worth its own section because it is where most live-stream faults originate in
+practice. What follows is the short version — the signalling, the two
+architectures and the failure modes are covered properly in
+<a href="/guide">the ad insertion guide</a>.</p>
+<ul>
+<li><strong>Client-side (CSAI)</strong>: the player fetches ads from an ad server and switches
+to them. Easy to block, easy to get wrong on TVs.</li>
+<li><strong>Server-side (SSAI)</strong>: a stitcher rewrites the manifest so ads and content are
+one continuous stream. Unblockable, and the source of a large fraction of
+production incidents.</li>
+</ul>
+<p>Ad opportunities are signalled with <strong>SCTE-35</strong> markers, carried in-band in TS
+or as <code>EXT-X-DATERANGE</code> / DASH events. A stitcher sees the marker, calls an ad
+decision server, and splices the returned creatives in.</p>
+<p>What it has to get right: in HLS, an <code>EXT-X-DISCONTINUITY</code> before and after the
+break, correct <code>EXTINF</code> durations for the ad segments, and a media sequence that
+keeps advancing. In DASH, a new <code>Period</code> with a correct <code>@start</code>, and a
+<code>@duration</code> on the period it interrupted that lands exactly where the new one
+begins.</p>
+<p>When the arithmetic is off by a frame — or by the length of the entire break —
+the presentation has a hole in it or two periods claiming the same instant.
+Players stall at the boundary, which viewers experience as <strong>the stream dying at
+exactly the moment the ad starts</strong>. It is also the most under-monitored failure
+in streaming, because the content before and after the break is perfectly
+healthy.</p>
+<div class="xref"><span class="tag">In StreamPulse</span><p><code>period_gap</code>, <code>period_overlap</code>, <code>discontinuity_present</code> (info —
+splice points are worth knowing about even when correct), and the timeline
+checks, which catch the same class of arithmetic error inside a period.</p></div>
+<hr>
+</section><section id="9-where-it-breaks-a-summary"><h2><span class="sec-num">09</span>Where it breaks: a summary</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Fails as</th>
+<th>Looks like</th>
+<th>Attribution</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Encoder</td>
+<td>Falls behind real time</td>
+<td>Live edge drifting further behind wall clock</td>
+<td><code>edge_stale</code> / <code>pdt_stale</code>, lag growing steadily</td>
+</tr>
+<tr>
+<td>Encoder</td>
+<td>Rung dies</td>
+<td>Black or frozen picture on one rung only</td>
+<td><code>black_frames</code>, <code>frozen_video</code>, other rungs fine</td>
+</tr>
+<tr>
+<td>Packager</td>
+<td>Stops publishing</td>
+<td>Manifest byte-identical, media sequence static</td>
+<td><code>playlist_stalled</code>, cache headers say the response is fresh</td>
+</tr>
+<tr>
+<td>Packager</td>
+<td>Bad splice</td>
+<td>Stall at an ad boundary</td>
+<td><code>period_gap</code>, <code>timeline_gap</code></td>
+</tr>
+<tr>
+<td>Packager</td>
+<td>DRM config lost</td>
+<td>Clear segments on a protected stream</td>
+<td><code>unexpected_clear_segments</code></td>
+</tr>
+<tr>
+<td>Origin</td>
+<td>Failover to a lagging instance</td>
+<td>Timeline goes backwards</td>
+<td><code>playlist_rollback</code></td>
+</tr>
+<tr>
+<td>Origin</td>
+<td>Storage purge</td>
+<td>DVR shorter than promised</td>
+<td><code>window_below_declared</code>, <code>short_window</code></td>
+</tr>
+<tr>
+<td>CDN</td>
+<td>Stale edge</td>
+<td>Manifest frozen — <strong>identical to a dead packager</strong></td>
+<td><code>Age</code> ≥ freeze duration; <code>X-Cache: STALE</code></td>
+</tr>
+<tr>
+<td>CDN</td>
+<td>Manifest TTL too long</td>
+<td>Stream advances in jumps</td>
+<td><code>manifest_age_seconds</code> climbing on a live stream</td>
+</tr>
+<tr>
+<td>CDN</td>
+<td>Whole-segment buffering</td>
+<td>Latency far above target, nothing else wrong</td>
+<td><code>chunked_delivery_missing</code></td>
+</tr>
+<tr>
+<td>CDN</td>
+<td>Missing object</td>
+<td>One segment 404s, others fine</td>
+<td><code>segment_availability</code></td>
+</tr>
+<tr>
+<td>Manifest</td>
+<td>Structurally wrong</td>
+<td>Plays on most devices, fails on some</td>
+<td>the structural checks in <a href="#4-hls">§4</a> and <a href="#5-dash">§5</a></td>
+</tr>
+</tbody></table></div>
+<p>The pattern worth internalising: <strong>the faults that matter most are the ones
+where every individual request succeeds.</strong> A 404 is easy — any uptime checker
+finds it. A stream that is perfectly available, perfectly fresh, fully
+structurally valid, and fifteen seconds behind where it should be is the one
+that survives a monitoring stack and reaches the viewer.</p>
+<hr>
+</section><section id="further-reading"><h2>Further reading</h2>
+<ul>
+<li><a href="https://datatracker.ietf.org/doc/html/rfc8216">RFC 8216</a> — HLS, the original
+specification. The living version is Apple&#39;s <code>draft-pantos-hls-rfc8216bis</code>.</li>
+<li><a href="https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices">HLS Authoring Specification for Apple
+Devices</a>
+— ladder requirements, and what the App Store enforces.</li>
+<li>ISO/IEC 23009-1 — DASH. Paywalled; the
+<a href="https://dashif.org/guidelines/">DASH-IF Interoperability Guidelines</a> are free
+and more useful in practice.</li>
+<li><a href="https://www.cta.tech/">CTA-5005 / CMAF</a> — the common container.</li>
+<li><a href="https://livesim2.dashif.org/">DASH-IF live simulator</a> — generates live DASH
+with configurable faults: multi-period, timeline addressing, segment loss. It
+is how several of the DASH checks here were developed. Poll it politely.</li>
+<li><a href="https://demo.unified-streaming.com/">Unified Streaming demo streams</a> — live
+HLS and DASH from a real packager, used throughout this project&#39;s testing.</li>
+</ul>
+</section>
+  </main>
+</div>
+</div>
+</body>
+</html>

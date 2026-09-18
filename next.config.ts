@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: "/guide", destination: "/guide.html" },
+      { source: "/streaming", destination: "/streaming.html" },
       { source: "/notes/fifty-five-alerts", destination: "/notes/fifty-five-alerts.html" },
     ];
   },

@@ -9,7 +9,8 @@ stream and tells you when that changes.
 
 **Live demo: [splicecheck.vercel.app](https://splicecheck.vercel.app)** ·
 **Reference: [how ad insertion works](https://splicecheck.vercel.app/guide)** ·
-**Write-up: [fifty-five alerts and nothing wrong](https://splicecheck.vercel.app/notes/fifty-five-alerts)**
+**Write-up: [fifty-five alerts and nothing wrong](https://splicecheck.vercel.app/notes/fifty-five-alerts)** ·
+**Reference: [how a stream gets to a viewer](https://splicecheck.vercel.app/streaming)**
 
 The interface follows the viewer's colour theme, and can be set to light or dark
 explicitly.

@@ -133,6 +133,7 @@ export default function Compare() {
         <div className="flex shrink-0 flex-col gap-1 text-sm">
           <Link href="/" className="text-accent hover:underline">← inspector</Link>
           <a href="/guide" className="text-accent hover:underline">how ad insertion works →</a>
+          <a href="/streaming" className="text-accent hover:underline">delivery chain →</a>
           <a href="/notes/fifty-five-alerts" className="text-accent hover:underline">fifty-five alerts →</a>
         </div>
       </header>

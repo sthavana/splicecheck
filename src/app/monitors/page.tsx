@@ -209,6 +209,7 @@ export default function Monitors() {
           <Link href="/" className="text-accent hover:underline">← one-off inspector</Link>
           <Link href="/compare" className="text-accent hover:underline">pipeline comparison →</Link>
           <a href="/guide" className="text-accent hover:underline">how ad insertion works →</a>
+          <a href="/streaming" className="text-accent hover:underline">delivery chain →</a>
           <a href="/notes/fifty-five-alerts" className="text-accent hover:underline">fifty-five alerts →</a>
         </div>
       </header>
