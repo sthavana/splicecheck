@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "monitor": "node scripts/monitor-dev.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "rm -f .data-test/test.db* && SPLICECHECK_DB=.data-test/test.db tsx --test tests/*.test.ts",
     "screenshots": "tsx scripts/screenshots.ts",
     "build:cli": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/cli.mjs --banner:js='#!/usr/bin/env node' --log-level=warning && chmod +x dist/cli.mjs"
   },

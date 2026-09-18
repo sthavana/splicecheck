@@ -392,6 +392,62 @@ export interface SchedulerStatus {
   reason?: string;
 }
 
+/**
+ * How much of a window the monitor actually observed.
+ *
+ * The poll loop runs in this process, so it stops whenever the machine sleeps.
+ * The resulting timeline is sparse rather than wrong — but a long silence looks
+ * exactly like a healthy quiet period, and a rule that measures elapsed wall
+ * clock across one will draw a conclusion from time nobody was watching. This
+ * makes the difference visible instead of leaving it to be inferred.
+ */
+export interface Coverage {
+  /** Polls actually made in the window. */
+  polls: number;
+  /** Polls the configured interval would have made. */
+  expected: number;
+  /** polls / expected, clamped to 1. */
+  ratio: number;
+  /** Longest stretch with no poll, seconds. */
+  longestGapSeconds: number;
+}
+
+/** The pure part, so the arithmetic can be tested without a database. */
+export function computeCoverage(
+  runAts: number[],
+  intervalSeconds: number,
+  windowMs: number,
+  now: number,
+): Coverage {
+  const since = now - windowMs;
+  const ats = runAts.filter((a) => a >= since).sort((a, b) => a - b);
+  const expected = Math.max(1, Math.round(windowMs / 1000 / intervalSeconds));
+
+  // A monitor that slept through the first half of the window must not look
+  // perfect, so the stretch from the window opening to the first poll counts —
+  // but only beyond one interval, since the window rarely opens on a poll.
+  let longest = 0;
+  let cursor = since + intervalSeconds * 1000;
+  for (const at of ats) {
+    longest = Math.max(longest, (at - cursor) / 1000);
+    cursor = at;
+  }
+  longest = Math.max(longest, (now - cursor) / 1000);
+
+  return {
+    polls: ats.length,
+    expected,
+    ratio: Math.min(1, ats.length / expected),
+    longestGapSeconds: Math.max(0, Math.round(longest)),
+  };
+}
+
+export function coverageOf(monitorId: string, intervalSeconds: number, windowMs = 3_600_000): Coverage {
+  const now = Date.now();
+  const ats = store.recentRuns(monitorId, 1000).map((r) => r.at);
+  return computeCoverage(ats, intervalSeconds, windowMs, now);
+}
+
 export function schedulerStatus(): SchedulerStatus {
   if (EPHEMERAL_STORAGE) {
     return {

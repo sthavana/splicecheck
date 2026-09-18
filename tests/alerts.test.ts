@@ -251,12 +251,14 @@ const withBreak = (o: { edgeDistance?: number; closed: boolean; signalled?: numb
   }) as unknown as RunResult;
 
 test("a break inside its duration at the live edge is not stuck", () => {
-  const alerts = trackBreaksForTest(monitor, withBreak({ edgeDistance: 20, closed: false }), Date.now());
+  const m: Monitor = { ...monitor, id: "stuck-inside" };
+  const alerts = trackBreaksForTest(m, withBreak({ edgeDistance: 20, closed: false }), Date.now());
   assert.deepEqual(alerts.map((a) => a.code), []);
 });
 
 test("a break well past its duration at the live edge is stuck", () => {
-  const alerts = trackBreaksForTest(monitor, withBreak({ edgeDistance: 300, closed: false }), Date.now());
+  const m: Monitor = { ...monitor, id: "stuck-past" };
+  const alerts = trackBreaksForTest(m, withBreak({ edgeDistance: 300, closed: false }), Date.now());
   assert.deepEqual(alerts.map((a) => a.code), ["BREAK_STUCK_OPEN"]);
 });
 
@@ -270,7 +272,8 @@ test("a long gap between polls cannot make a healthy break look stuck", () => {
 });
 
 test("a closed break is never stuck", () => {
-  const alerts = trackBreaksForTest(monitor, withBreak({ edgeDistance: 999, closed: true }), Date.now());
+  const m: Monitor = { ...monitor, id: "stuck-closed" };
+  const alerts = trackBreaksForTest(m, withBreak({ edgeDistance: 999, closed: true }), Date.now());
   assert.deepEqual(alerts.map((a) => a.code), []);
 });
 
@@ -282,4 +285,55 @@ test("the analyser's own overrun finding suppresses the duplicate", () => {
     new Set(["BREAK_OVERRUN_UNCLOSED"]),
   );
   assert.deepEqual(alerts.map((a) => a.code), [], "one fault, one alert");
+});
+
+/* ------------------------------------------------- how much was watched --
+ * The poll loop runs in the dev process, so it stops whenever the machine
+ * sleeps. A sparse hour is not a wrong timeline, but it reads exactly like a
+ * quiet one, and that is how a monitor gets trusted for hours it never saw.
+ */
+
+import { computeCoverage } from "../src/lib/monitor";
+
+const HOUR = 3_600_000;
+const NOW = 1_700_000_000_000;
+/** Polls every `every` seconds across the whole window. */
+const steady = (every: number) =>
+  Array.from({ length: Math.floor(3600 / every) }, (_, i) => NOW - HOUR + (i + 1) * every * 1000);
+
+test("an uninterrupted hour is fully covered", () => {
+  const c = computeCoverage(steady(20), 20, HOUR, NOW);
+  assert.equal(c.ratio, 1);
+  assert.ok(c.longestGapSeconds <= 20, `longest gap ${c.longestGapSeconds}s`);
+});
+
+test("sleeping for four minutes in every five shows up as a gap", () => {
+  // The observed pattern: awake 45s, asleep 256s, repeating.
+  const ats: number[] = [];
+  for (let cycle = 0; cycle < 12; cycle++) {
+    const base = NOW - HOUR + cycle * 301_000;
+    for (let i = 0; i < 3; i++) ats.push(base + i * 20_000);
+  }
+  const c = computeCoverage(ats, 20, HOUR, NOW);
+  assert.ok(c.ratio < 0.3, `ratio ${c.ratio}`);
+  assert.ok(c.longestGapSeconds > 200, `longest gap ${c.longestGapSeconds}s`);
+});
+
+test("a monitor that slept through the first half does not look perfect", () => {
+  const ats = steady(20).filter((a) => a > NOW - HOUR / 2);
+  const c = computeCoverage(ats, 20, HOUR, NOW);
+  assert.ok(c.ratio <= 0.55, `ratio ${c.ratio}`);
+  assert.ok(c.longestGapSeconds > 1700, `longest gap ${c.longestGapSeconds}s`);
+});
+
+test("a monitor that stopped an hour ago reports the whole window unwatched", () => {
+  const c = computeCoverage([], 20, HOUR, NOW);
+  assert.equal(c.polls, 0);
+  assert.equal(c.ratio, 0);
+  assert.ok(c.longestGapSeconds >= 3580);
+});
+
+test("polls outside the window are not counted", () => {
+  const c = computeCoverage([NOW - 2 * HOUR, NOW - 90 * 60_000], 20, HOUR, NOW);
+  assert.equal(c.polls, 0);
 });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { store } from "@/lib/store";
-import { newMonitorId, runMonitorOnce, schedulerStatus, startScheduler } from "@/lib/monitor";
+import { coverageOf, newMonitorId, runMonitorOnce, schedulerStatus, startScheduler } from "@/lib/monitor";
 import { assertPublicUrl } from "@/lib/runner";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ export async function GET() {
     const last = runs[0];
     return {
       ...m,
+      coverage: coverageOf(m.id, m.intervalSeconds),
       last: last
         ? {
             at: last.at,

@@ -8,6 +8,12 @@ interface MonitorRow {
   url: string;
   label: string;
   intervalSeconds: number;
+  coverage?: {
+    polls: number;
+    expected: number;
+    ratio: number;
+    longestGapSeconds: number;
+  };
   enabled: number;
   webhookUrl: string | null;
   stitchedUrl: string | null;
@@ -77,6 +83,26 @@ function FillTrend({ history }: { history: MonitorRow["history"] }) {
           />
         );
       })}
+    </span>
+  );
+}
+
+/**
+ * The poll loop only runs while this machine is awake, so a monitor can go
+ * quiet for reasons that have nothing to do with the stream. Saying so beside
+ * the interval keeps a sparse hour from reading as an uneventful one.
+ */
+function CoverageChip({ c }: { c: NonNullable<MonitorRow["coverage"]> }) {
+  if (c.ratio >= 0.9) return <span>{Math.round(c.ratio * 100)}% covered</span>;
+  const gap = c.longestGapSeconds >= 120
+    ? `${Math.round(c.longestGapSeconds / 60)}min`
+    : `${c.longestGapSeconds}s`;
+  return (
+    <span
+      className="rounded border border-warn-line bg-warn-soft px-1.5 py-0.5 text-warn"
+      title={`${c.polls} of about ${c.expected} expected polls in the last hour. Longest silence ${gap}. The poll loop stops while the machine sleeps — npm run monitor holds a wake lock.`}
+    >
+      {Math.round(c.ratio * 100)}% covered · {gap} unwatched
     </span>
   );
 }
@@ -329,6 +355,7 @@ export default function Monitors() {
                 <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted">
                   <Sparkline history={m.history} />
                   <span>every {m.intervalSeconds}s</span>
+                  {m.coverage && <CoverageChip c={m.coverage} />}
                   {m.last && <span>last {ago(m.last.at)} in {m.last.durationMs}ms</span>}
                   {m.last?.ok === 1 && (
                     <>
