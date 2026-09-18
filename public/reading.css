@@ -22,7 +22,7 @@
   --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --body: "Source Serif 4", Georgia, "Times New Roman", serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --measure: 66ch;
+  --measure: 72ch;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -99,7 +99,7 @@ body {
 .toolbar .spacer { margin-left: auto; }
 
 .shell { max-width: 760px; margin: 0 auto; padding-inline: 20px; padding-block: 0 96px; }
-.shell.wide { max-width: 1180px; }
+.shell.wide { max-width: 980px; }
 
 header.masthead {
   padding-block: 56px 40px;
@@ -116,8 +116,8 @@ h1 {
   letter-spacing: -0.025em; margin: 0 0 20px; text-wrap: balance;
 }
 .standfirst {
-  font-size: clamp(18px, 2.2vw, 21px); line-height: 1.55;
-  color: var(--ink-soft); max-width: 58ch; margin: 0;
+  font-size: clamp(18px, 2.2vw, 22px); line-height: 1.55;
+  color: var(--ink-soft); max-width: 62ch; margin: 0;
 }
 
 section { margin-bottom: 68px; scroll-margin-top: 24px; }
@@ -222,6 +222,10 @@ footer.colophon {
   font-size: 14.5px; color: var(--ink-faint); max-width: var(--measure);
 }
 
+@media (min-width: 1100px) {
+  body { font-size: 18.5px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
@@ -233,6 +237,7 @@ footer.colophon {
  */
 
 .site-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); align-items: start; }
+.site-main { min-width: 0; }
 
 .site-nav {
   position: sticky; top: 0; height: 100vh; overflow-y: auto;
@@ -287,7 +292,7 @@ footer.colophon {
 .site-nav-foot a:hover { color: var(--accent); }
 
 @media (max-width: 900px) {
-  .site-shell { grid-template-columns: 1fr; }
+  .site-shell { grid-template-columns: minmax(0, 1fr); }
   .site-nav {
     position: static; height: auto; border-right: none;
     border-bottom: 1px solid var(--rule);
