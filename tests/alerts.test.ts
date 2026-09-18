@@ -219,3 +219,67 @@ test("a good run after a good run announces nothing", () => {
     [],
   );
 });
+
+/* ------------------------------------------------ a break that is stuck --
+ * Measured on the media timeline. Wall clock since the break was first seen
+ * grows with the DVR window for every break whether or not anything is wrong,
+ * and keeps growing while the poller is not looking — a 256s gap between polls
+ * was enough to report a break that closed twenty seconds later as stuck.
+ */
+
+import { trackBreaksForTest } from "../src/lib/monitor";
+
+const withBreak = (o: { edgeDistance?: number; closed: boolean; signalled?: number }): RunResult =>
+  ({
+    ...result("pass", 0, 0, 1),
+    renditions: [
+      {
+        label: "v",
+        findings: [],
+        breaks: [
+          {
+            index: 0,
+            eventId: 999,
+            startTime: 0,
+            signalledDuration: o.signalled ?? 38.4,
+            closed: o.closed,
+            edgeDistance: o.edgeDistance,
+          },
+        ],
+      },
+    ],
+  }) as unknown as RunResult;
+
+test("a break inside its duration at the live edge is not stuck", () => {
+  const alerts = trackBreaksForTest(monitor, withBreak({ edgeDistance: 20, closed: false }), Date.now());
+  assert.deepEqual(alerts.map((a) => a.code), []);
+});
+
+test("a break well past its duration at the live edge is stuck", () => {
+  const alerts = trackBreaksForTest(monitor, withBreak({ edgeDistance: 300, closed: false }), Date.now());
+  assert.deepEqual(alerts.map((a) => a.code), ["BREAK_STUCK_OPEN"]);
+});
+
+test("a long gap between polls cannot make a healthy break look stuck", () => {
+  // The break has been visible for an hour of wall clock because the window
+  // slid and the poller slept; on the media timeline it opened 20s ago.
+  const m: Monitor = { ...monitor, id: "gap-test" };
+  trackBreaksForTest(m, withBreak({ edgeDistance: 5, closed: false }), Date.now() - 3_600_000);
+  const alerts = trackBreaksForTest(m, withBreak({ edgeDistance: 20, closed: false }), Date.now());
+  assert.deepEqual(alerts.map((a) => a.code), []);
+});
+
+test("a closed break is never stuck", () => {
+  const alerts = trackBreaksForTest(monitor, withBreak({ edgeDistance: 999, closed: true }), Date.now());
+  assert.deepEqual(alerts.map((a) => a.code), []);
+});
+
+test("the analyser's own overrun finding suppresses the duplicate", () => {
+  const alerts = trackBreaksForTest(
+    { ...monitor, id: "dedupe-test" },
+    withBreak({ edgeDistance: 300, closed: false }),
+    Date.now(),
+    new Set(["BREAK_OVERRUN_UNCLOSED"]),
+  );
+  assert.deepEqual(alerts.map((a) => a.code), [], "one fault, one alert");
+});

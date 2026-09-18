@@ -182,7 +182,14 @@ export function diffRun(prev: Run | undefined, result: RunResult, monitor: Monit
 }
 
 /** Track break lifecycle across polls so a break that never closes gets caught. */
-function trackBreaks(monitor: Monitor, result: RunResult, now: number): AlertDraft[] {
+export { trackBreaks as trackBreaksForTest };
+
+function trackBreaks(
+  monitor: Monitor,
+  result: RunResult,
+  now: number,
+  alreadyReported: Set<string> = new Set(),
+): AlertDraft[] {
   const alerts: AlertDraft[] = [];
   const breaks = result.renditions[0]?.breaks ?? [];
   const known = new Map(store.openBreaks(monitor.id).map((b) => [b.breakKey, b]));
@@ -200,18 +207,35 @@ function trackBreaks(monitor: Monitor, result: RunResult, now: number): AlertDra
     });
   }
 
-  // A break still open well past its signalled duration is stuck.
+  // A break still open well past its signalled duration is stuck — but that has
+  // to be measured on the media timeline, not on the clock.
+  //
+  // Wall clock since the break was first seen measures how long it has been
+  // visible in a sliding DVR window, which grows for every break whether or not
+  // anything is wrong, and keeps growing while the poller is not looking. A
+  // 256s gap between polls was enough to report a break that closed twenty
+  // seconds later as stuck. edgeDistance is the distance from the break's start
+  // to the live edge in the stream's own time, so a missed poll cannot inflate
+  // it.
+  //
+  // Where the analyser has already reported the overrun from a single manifest,
+  // that finding is the alert; raising this one as well would make one fault
+  // arrive twice.
+  const analyserSawIt = alreadyReported.has("BREAK_OVERRUN_UNCLOSED");
   for (const open of store.openBreaks(monitor.id)) {
-    if (open.alerted) continue;
+    if (open.alerted || analyserSawIt) continue;
     const stillPresent = breaks.find((b) => breakKey(b) === open.breakKey);
     if (!stillPresent || stillPresent.closed) continue;
-    const budget = (open.signalled ?? 60) * 1000 + STUCK_BREAK_GRACE_MS;
-    if (now - open.firstSeen > budget) {
+
+    const elapsed = stillPresent.edgeDistance;
+    if (elapsed === undefined) continue; // no PDT to measure against
+    const budget = (open.signalled ?? 60) + STUCK_BREAK_GRACE_MS / 1000;
+    if (elapsed > budget) {
       alerts.push({
         severity: "error",
         code: "BREAK_STUCK_OPEN",
         title: `${monitor.label}: an ad break has not closed`,
-        detail: `Break ${open.breakKey} was first seen ${Math.round((now - open.firstSeen) / 1000)}s ago and signalled ${open.signalled ?? "an unknown"}s, but no return-from-break has appeared. Players that entered this avail are still in ad mode, and SSAI is still substituting content.`,
+        detail: `Break ${open.breakKey} signalled ${open.signalled ?? "an unknown"}s but the live edge is now ${Math.round(elapsed)}s past its start with no return-from-break. Players that entered this avail are still in ad mode, and SSAI is still substituting content.`,
       });
       store.markBreakAlerted(monitor.id, open.breakKey);
     }
@@ -261,7 +285,7 @@ export async function runMonitorOnce(monitor: Monitor): Promise<{ ok: boolean; a
     const findings = codesOf(result);
 
     alerts = diffRun(prev, result, monitor);
-    alerts.push(...trackBreaks(monitor, result, now));
+    alerts.push(...trackBreaks(monitor, result, now, new Set(alerts.map((a) => a.code))));
 
     // With a stitched output configured, every poll also answers whether the
     // ad service did its job — turning a spot check into a tracked metric.
