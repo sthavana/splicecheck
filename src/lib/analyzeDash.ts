@@ -537,6 +537,39 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
             { breakIndex: index, atTime: startTime },
           );
         }
+      } else if (boundedByDuration && live && declared !== undefined) {
+        // An avail bounded by a declared duration is correctly closed — no end
+        // event is coming, and the return is implied by the duration. What is
+        // not correct is the presentation never leaving the ad: if the Period
+        // that exists for this avail is still the Period in play well past the
+        // point the avail said it would end, nothing returned to programme.
+        //
+        // Two guards keep this off healthy manifests. It only applies where the
+        // avail owns its Period — an Event sitting mid-Period on a
+        // single-Period stream describes a break without splitting the
+        // timeline, and programme continuing past it is exactly right. And it
+        // measures at the declared end plus a margin, because a Period is
+        // expected to still be in play right up to its own end.
+        const ownsItsPeriod = periods.length > 1 && s.event.presentationTime <= GAP_ERROR;
+        const margin = Math.max(GAP_ERROR, (mpd.minimumUpdatePeriod ?? 6) * 2);
+        const past = startTime + declared + margin;
+        const periodAt = periods.find(
+          (pd) => past >= pd.start && past < pd.start + (pd.declaredDuration ?? pd.mediaDuration),
+        );
+
+        if (ownsItsPeriod && periodAt && periodAt.index === s.period.index) {
+          const elapsed =
+            s.period.start + (s.period.declaredDuration ?? s.period.mediaDuration) - startTime;
+          add(
+            "error",
+            "BREAK_OVERRUN_UNCLOSED",
+            `Break ${index} has run ${fmt(elapsed - declared)}s past the ${fmt(declared)}s it signalled and is still on air`,
+            `Period ${s.period.id ?? s.period.index} exists for this avail and declares ${fmt(declared)}s (${b.signalledDurationSource ?? "declared duration"}), but it is still the Period in play ${fmt(elapsed - declared)}s after that. No later Period picks the programme back up and no end event closes the avail. Ad content is being published over programme, and clients that honoured the declared duration have already returned while the manifest has not brought them back.${
+              autoReturn ? " The SCTE-35 sets auto_return, so systems acting on the stream returned on their own — which is what makes this divergence hard to see from any one place." : ""
+            }`,
+            { breakIndex: index, atTime: startTime },
+          );
+        }
       } else if (end && b.signalledDuration !== undefined && actual !== undefined) {
         const delta = actual - b.signalledDuration;
         if (Math.abs(delta) > GAP_WARN) {

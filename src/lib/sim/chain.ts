@@ -43,6 +43,8 @@ export interface SimConfig {
       dropPresentationTimeOffset?: boolean;
       /** DASH: do not declare continuity across the splices. */
       noPeriodContinuity?: boolean;
+      /** DASH: the ad Period never ends and no end event is written. */
+      availNeverReturns?: boolean;
       /** CSAI: the ad server does not answer in time. */
       adServerTimeout?: boolean;
       /** CSAI: the request never leaves the device. */
@@ -61,7 +63,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   ],
   signalStyle: "time_signal",
   markerStyle: "both",
-  windowSegments: 20,
+  windowSegments: 30,
   stitchMode: "fill",
   protocol: "hls",
   adMode: "ssai",
@@ -138,7 +140,11 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
     emitEventStream: true,
     timeShiftBufferDepth: config.windowSegments * config.segmentSeconds,
     minimumUpdatePeriod: config.segmentSeconds,
-    faults: { periodGap: f.periodGap, dropPresentationTimeOffset: f.dropPresentationTimeOffset },
+    faults: {
+      periodGap: f.periodGap,
+      dropPresentationTimeOffset: f.dropPresentationTimeOffset,
+      availNeverReturns: f.availNeverReturns,
+    },
     ...config.dash,
   };
 

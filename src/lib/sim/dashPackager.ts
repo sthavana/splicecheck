@@ -30,6 +30,13 @@ export interface DashSpec {
     periodGap?: boolean;
     /** Omit @presentationTimeOffset, so the segment numbering means nothing. */
     dropPresentationTimeOffset?: boolean;
+    /**
+     * The ad Period absorbs everything after it and no end event is written:
+     * the presentation never returns to programme. This is the DASH shape of a
+     * lost return — there is no CUE-IN to drop, so the failure appears as a
+     * Period that keeps growing past the duration its avail declared.
+     */
+    availNeverReturns?: boolean;
   };
 }
 
@@ -70,6 +77,8 @@ function planPeriods(tl: Timeline, spec: DashSpec, from: number, count: number):
   const periods: PeriodPlan[] = [];
   let run: Timeline["segments"] = [];
   let runAvail: number | undefined;
+  const neverReturns = spec.faults?.availNeverReturns === true;
+  let stuckInAvail = false;
   const flush = () => {
     if (run.length === 0) return;
     periods.push({
@@ -83,9 +92,16 @@ function planPeriods(tl: Timeline, spec: DashSpec, from: number, count: number):
     run = [];
   };
   for (const s of slice) {
+    // Once the avail has started and the return is lost, every following
+    // segment stays inside the ad Period rather than opening a new one.
+    if (stuckInAvail) {
+      run.push(s);
+      continue;
+    }
     if (s.availId !== runAvail) {
       flush();
       runAvail = s.availId;
+      if (neverReturns && runAvail !== undefined) stuckInAvail = true;
     }
     run.push(s);
   }
@@ -140,7 +156,10 @@ export function writeMpd(
 
     if (spec.emitEventStream) {
       const signals = tl.signals.filter(
-        (s) => s.mediaSec >= p.startSec && s.mediaSec < p.startSec + p.durationSec,
+        (s) =>
+          s.mediaSec >= p.startSec &&
+          s.mediaSec < p.startSec + p.durationSec &&
+          !(faults.availNeverReturns && s.kind === "in"),
       );
       if (signals.length) {
         lines.push(`    <EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="${TIMESCALE}">`);

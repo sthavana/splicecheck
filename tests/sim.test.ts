@@ -5,6 +5,8 @@ import { decodePayloadBytes, parseSpliceInfoSection } from "../src/lib/scte35";
 import { buildTimeline } from "../src/lib/sim/timeline";
 import { writeMediaPlaylist } from "../src/lib/sim/packager";
 import { runChain, DEFAULT_CONFIG, type SimConfig } from "../src/lib/sim/chain";
+import { writeMpd } from "../src/lib/sim/dashPackager";
+import { analyzeText } from "../src/lib/runner";
 import type { AvailStatus } from "../src/lib/pipeline";
 
 /* ------------------------------------------------------------ the encoder */
@@ -290,4 +292,68 @@ test("a blocked client-side ad fires no beacons at all", () => {
 test("a packager that drops the CUE-IN is caught, and only then", () => {
   assert.ok(originCodes({ faults: { dropCueIn: true } }).includes("BREAK_OVERRUN_UNCLOSED"));
   assert.ok(!originCodes({}).includes("BREAK_OVERRUN_UNCLOSED"));
+});
+
+/* ------------------------------------- a DASH avail that never returns --
+ * The DASH shape of a lost return is not a missing CUE-IN — there is no such
+ * tag. It is a Period that exists for an avail and keeps growing past the
+ * duration that avail declared, with no later Period picking the programme up.
+ */
+
+function dashFindings(cfg: Partial<SimConfig>, side: "origin" | "ssai") {
+  const a = run({ protocol: "dash", ...cfg }).analysis[side];
+  if ("error" in a) throw new Error(a.error);
+  return a.renditions.flatMap((r) => r.findings).concat(a.crossFindings);
+}
+
+test("an ad Period still in play well past its declared duration is an error", () => {
+  const f = dashFindings({ windowSegments: 30, faults: { availNeverReturns: true } }, "ssai");
+  const hit = f.find((x) => x.code === "BREAK_OVERRUN_UNCLOSED");
+  assert.ok(hit, "the lost return must be reported");
+  assert.equal(hit!.severity, "error");
+});
+
+test("a clean DASH run never reports an overrun, at any window size", () => {
+  for (const windowSegments of [20, 24, 30, 40]) {
+    assert.deepEqual(
+      dashFindings({ windowSegments }, "ssai").map((x) => x.code),
+      [],
+      `window ${windowSegments}`,
+    );
+  }
+});
+
+test("an ad Period inside the margin is not yet an error", () => {
+  // 102s against a 90s declaration, with a 6s minimumUpdatePeriod: one refresh
+  // interval late is not a lost return.
+  const f = dashFindings({ windowSegments: 20, faults: { availNeverReturns: true } }, "ssai");
+  assert.ok(!f.some((x) => x.code === "BREAK_OVERRUN_UNCLOSED"));
+});
+
+test("an Event mid-Period describes a break without owning one, and is not judged", () => {
+  // Single-Period DASH carries the avail as an Event with a duration and never
+  // splits the timeline. Programme continuing past it is exactly right.
+  const r = run({ protocol: "dash", adMode: "csai", faults: { availNeverReturns: true } });
+  const a = r.analysis.origin;
+  if ("error" in a) throw new Error(a.error);
+  assert.equal(a.meta.mpd?.periodCount, 1, "single Period, so the avail owns nothing");
+  assert.ok(!a.renditions.flatMap((x) => x.findings).some((x) => x.code === "BREAK_OVERRUN_UNCLOSED"));
+});
+
+test("an ad Period that ends on its declared duration is closed, end event or not", () => {
+  // The return is implied by @duration: the ad Period stops and a programme
+  // Period picks up. Nothing is wrong, and no end event is required to say so.
+  const r = run({ protocol: "dash", windowSegments: 30 });
+  const tl = { ...r.timeline, signals: r.timeline.signals.filter((s) => s.kind !== "in") };
+  const mpd = writeMpd(
+    tl,
+    { multiPeriod: true, periodContinuity: true, emitEventStream: true, minimumUpdatePeriod: 6 },
+    { from: 17, count: 30 },
+  );
+  const a = analyzeText(mpd.text, "sim://dash/manifest.mpd");
+  assert.ok(a.meta.mpd!.periodCount > 2, "the programme resumes in a later Period");
+  assert.ok(
+    !a.renditions.flatMap((x) => x.findings).some((x) => x.code === "BREAK_OVERRUN_UNCLOSED"),
+    "a Period that ended on time is not an overrun",
+  );
 });

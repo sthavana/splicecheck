@@ -56,6 +56,7 @@ const FAULTS: Fault[] = [
   { key: "stalled", label: "Stall the origin", blurb: "A valid manifest that has stopped advancing.", stage: "Origin" },
   { key: "dropDiscontinuity", label: "Splice without a discontinuity", blurb: "Ads spliced in with no decoder reset.", stage: "SSAI", requires: { protocol: "hls", adMode: "ssai" } },
   { key: "noPeriodContinuity", label: "No period continuity", blurb: "Players re-initialise the decoder at every ad transition.", stage: "SSAI", requires: { protocol: "dash", adMode: "ssai" } },
+  { key: "availNeverReturns", label: "Avail never returns", blurb: "The ad Period keeps growing past the duration it declared.", stage: "SSAI", requires: { protocol: "dash", adMode: "ssai" } },
   { key: "periodGap", label: "Gap between Periods", blurb: "The next Period starts later than the previous one ended.", stage: "SSAI", requires: { protocol: "dash", adMode: "ssai" } },
   { key: "dropPresentationTimeOffset", label: "Drop @presentationTimeOffset", blurb: "Segment numbering no longer maps to the presentation timeline.", stage: "Packaging", requires: { protocol: "dash" } },
   { key: "adBlocked", label: "Ad request blocked", blurb: "A blocklist stops the call before it leaves the device.", stage: "CSAI", requires: { adMode: "csai" } },
@@ -214,10 +215,22 @@ export default function SimulatorPage() {
 
   const current = data?.stages.find((s) => s.id === stage);
   const comparison = data && !("error" in data.analysis.comparison) ? data.analysis.comparison : null;
-  const originFindings = data ? findingsOf(data.analysis.origin) : [];
-  const worst = originFindings.some((f) => f.severity === "error")
+  // Findings follow the stage on screen. In DASH especially, a fault belongs to
+  // one manifest and not the other — a Period that never returns is a property
+  // of the stitched output, and reporting it against the source would be wrong.
+  const inspected = stage === "ssai" ? data?.analysis.ssai : data?.analysis.origin;
+  const inspectedLabel =
+    stage === "ssai"
+      ? adMode === "csai"
+        ? "the manifest the player reads"
+        : "the stitched output"
+      : protocol === "dash"
+        ? "the packaged MPD"
+        : "the origin manifest";
+  const shownFindings = inspected ? findingsOf(inspected) : [];
+  const worst = shownFindings.some((f) => f.severity === "error")
     ? "error"
-    : originFindings.some((f) => f.severity === "warning")
+    : shownFindings.some((f) => f.severity === "warning")
       ? "warning"
       : "clean";
 
@@ -383,18 +396,18 @@ export default function SimulatorPage() {
           <section className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-lg border border-edge bg-panel p-5">
               <h2 className="mb-1 text-sm font-medium text-foreground">
-                The inspector on the {protocol === "dash" ? "MPD" : "origin manifest"}
+                The inspector on {inspectedLabel}
               </h2>
               <p className="mb-3 text-xs text-muted">
                 {worst === "clean"
                   ? "Nothing above information — the stream is correct."
-                  : `${originFindings.filter((f) => f.severity !== "info").length} finding(s) worth acting on.`}
+                  : `${shownFindings.filter((f) => f.severity !== "info").length} finding(s) worth acting on.`}
               </p>
-              {originFindings.length === 0 ? (
+              {shownFindings.length === 0 ? (
                 <p className="text-sm text-muted">No findings.</p>
               ) : (
                 <ul className="flex flex-col gap-2.5">
-                  {originFindings.map((f, i) => (
+                  {shownFindings.map((f, i) => (
                     <li key={i} className="flex gap-2.5">
                       <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${SEV_DOT[f.severity]}`} />
                       <span className="min-w-0">
