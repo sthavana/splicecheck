@@ -281,6 +281,7 @@ footer.colophon {
 
 .site-nav-foot {
   margin-top: auto; padding-top: 18px; border-top: 1px solid var(--rule);
+  display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
 }
 .site-nav-foot a { font-size: 13px; color: var(--ink-faint); text-decoration: none; }
 .site-nav-foot a:hover { color: var(--accent); }
@@ -297,5 +298,27 @@ footer.colophon {
   .site-nav-group h2 { margin: 0; }
   .site-nav-group ul { flex-direction: row; flex-wrap: wrap; gap: 2px 4px; }
   .site-nav-toc { display: none; }
-  .site-nav-foot { margin-top: 0; padding-top: 0; border-top: none; margin-left: auto; }
+  .site-nav-foot {
+    margin-top: 0; padding-top: 0; border-top: none; margin-left: auto;
+    flex-direction: row; align-items: center; gap: 14px;
+  }
 }
+
+/* --------------------------------------------------------- theme toggle --
+ * Matches the control in the tool's nav. Built by /theme.js rather than sat
+ * in each page's markup, since it does nothing without script anyway.
+ */
+
+.theme-toggle {
+  display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--rule); background: var(--surface-alt);
+  border-radius: 8px; padding: 2px;
+}
+.theme-toggle button {
+  font-family: var(--display); font-size: 11px; line-height: 1.4;
+  border: none; background: none; color: var(--ink-faint);
+  padding: 4px 8px; border-radius: 6px; cursor: pointer;
+}
+.theme-toggle button:hover { color: var(--ink); }
+.theme-toggle button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; }
+.theme-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

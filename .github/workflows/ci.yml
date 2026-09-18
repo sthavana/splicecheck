@@ -41,6 +41,7 @@ jobs:
           for f in public/guide.html public/streaming.html public/notes/*.html; do
             grep -q 'reading.css' "$f" || { echo "$f does not link /reading.css"; exit 1; }
             grep -q 'site-nav-brand' "$f" || { echo "$f has no site navigation"; exit 1; }
+            grep -q 'theme.js' "$f" || { echo "$f has no theme control"; exit 1; }
           done
           echo "all static pages link the stylesheet and carry navigation"
 
