@@ -10,6 +10,13 @@ export const metadata: Metadata = {
   title: "SpliceCheck — ad-break inspector for HLS and DASH",
   description:
     "Point it at a stream and see every ad break, the decoded SCTE-35 behind it, and what will break in server-side ad insertion.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "32x32" },
+    ],
+    apple: "/apple-icon.png",
+  },
 };
 
 /**

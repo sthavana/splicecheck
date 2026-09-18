@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="SpliceCheck">
+  <title>SpliceCheck</title>
+  <!--
+    A run of programme segments with one replaced: the inserted block is a
+    different colour and breaks the height of the line, which is what an avail
+    looks like on a timeline. Three shapes, so it still reads at 16px.
+  -->
+  <rect width="32" height="32" rx="7" fill="#10151b"/>
+
+  <!-- programme, before and after -->
+  <rect x="3.5"  y="13" width="7.5" height="6" rx="1.6" fill="#93a0b1"/>
+  <rect x="21" y="13" width="7.5" height="6" rx="1.6" fill="#93a0b1"/>
+
+  <!-- the inserted ad: taller, and the one thing in colour -->
+  <rect x="13" y="8" width="6" height="16" rx="1.8" fill="#f0a04b"/>
+</svg>
