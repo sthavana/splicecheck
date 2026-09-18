@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -195,23 +194,17 @@ export default function Monitors() {
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
-      <header className="mb-8 flex flex-wrap items-baseline justify-between gap-3">
+      <header className="mb-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Splice<span className="text-accent">Check</span> monitors
+            Monitors
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-soft">
             Poll a stream continuously and alert when its ad signalling changes for the worse — a break
             that never closes, signalling that disappears, a new fault that was not there on the last poll.
           </p>
         </div>
-        <div className="flex shrink-0 flex-col gap-1 text-sm">
-          <Link href="/" className="text-accent hover:underline">← one-off inspector</Link>
-          <Link href="/compare" className="text-accent hover:underline">pipeline comparison →</Link>
-          <a href="/guide" className="text-accent hover:underline">how ad insertion works →</a>
-          <a href="/streaming" className="text-accent hover:underline">delivery chain →</a>
-          <a href="/notes/fifty-five-alerts" className="text-accent hover:underline">fifty-five alerts →</a>
-        </div>
+
       </header>
 
       {scheduler && !scheduler.running && scheduler.reason && (

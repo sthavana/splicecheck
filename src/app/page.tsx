@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 
 import { useState } from "react";
 import type { AnalysisResult, AdBreak, Finding, Interstitial, PeriodSummary, RenditionAnalysis } from "@/lib/analyze";
@@ -500,7 +499,7 @@ export default function Home() {
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
-      <header className="mb-8 flex flex-wrap items-start justify-between gap-3">
+      <header className="mb-8">
         <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           Splice<span className="text-accent">Check</span>
@@ -512,23 +511,7 @@ export default function Home() {
           splice at the same point, and periods that do not meet.
         </p>
         </div>
-        <div className="flex shrink-0 flex-col gap-1 text-sm">
-          <Link href="/compare" className="text-accent hover:underline">
-            pipeline comparison →
-          </Link>
-          <Link href="/monitors" className="text-accent hover:underline">
-            continuous monitors →
-          </Link>
-          <a href="/guide" className="text-accent hover:underline">
-            how ad insertion works →
-          </a>
-          <a href="/streaming" className="text-accent hover:underline">
-            how a stream reaches a viewer →
-          </a>
-          <a href="/notes/fifty-five-alerts" className="text-accent hover:underline">
-            fifty-five alerts and nothing wrong →
-          </a>
-        </div>
+
       </header>
 
       <section className="rounded-xl border border-edge bg-panel p-4">

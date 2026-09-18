@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import ThemeToggle from "./theme-toggle";
+import SiteNav from "./site-nav";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -31,13 +31,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: noFlash }} />
       </head>
-      <body className="min-h-full flex flex-col">
-        <div className="pointer-events-none fixed right-3 top-3 z-50 sm:right-5 sm:top-5">
-          <div className="pointer-events-auto">
-            <ThemeToggle />
-          </div>
+      <body className="min-h-full">
+        <div className="site-shell">
+          <SiteNav />
+          <div className="min-w-0">{children}</div>
         </div>
-        {children}
       </body>
     </html>
   );

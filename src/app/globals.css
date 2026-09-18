@@ -149,3 +149,113 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ------------------------------------------------------------- site nav --
+ * A persistent rail rather than a stack of links in the corner: the site has
+ * six destinations now, and a corner list stops scaling at about three.
+ */
+
+.site-shell {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  align-items: start;
+  min-height: 100%;
+}
+
+.site-nav {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  padding: 22px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.site-nav-brand {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  text-decoration: none;
+}
+.site-nav-brand span { color: var(--accent); }
+
+.site-nav-group h2 {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+.site-nav-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.site-nav-group a {
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--soft);
+  text-decoration: none;
+  padding: 5px 9px;
+  margin-inline: -9px;
+  border-radius: 6px;
+}
+.site-nav-group a:hover { background: var(--raise); color: var(--foreground); }
+.site-nav-group a[aria-current="page"] {
+  background: var(--raise-strong);
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.site-nav-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.site-nav-foot > a {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.site-nav-foot > a:hover { color: var(--accent); }
+
+@media (max-width: 860px) {
+  .site-shell { grid-template-columns: 1fr; }
+  .site-nav {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    padding: 12px 20px;
+  }
+  .site-nav-group { display: flex; align-items: center; gap: 10px; }
+  .site-nav-group h2 { margin: 0; }
+  .site-nav-group ul { flex-direction: row; flex-wrap: wrap; gap: 2px 4px; }
+  .site-nav-foot {
+    margin-top: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding-top: 0;
+    border-top: none;
+    margin-left: auto;
+  }
+}

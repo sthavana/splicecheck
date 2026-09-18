@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 
 import { useState } from "react";
 import type { AvailComparison, AvailStatus, PipelineComparison } from "@/lib/pipeline";
@@ -118,10 +117,10 @@ export default function Compare() {
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
-      <header className="mb-8 flex flex-wrap items-start justify-between gap-3">
+      <header className="mb-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Splice<span className="text-accent">Check</span> pipeline
+            Pipeline comparison
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-soft">
             Compare the signalling feed going into an ad-insertion service with the stitched output
@@ -130,12 +129,7 @@ export default function Compare() {
             streams side by side and settles it.
           </p>
         </div>
-        <div className="flex shrink-0 flex-col gap-1 text-sm">
-          <Link href="/" className="text-accent hover:underline">← inspector</Link>
-          <a href="/guide" className="text-accent hover:underline">how ad insertion works →</a>
-          <a href="/streaming" className="text-accent hover:underline">delivery chain →</a>
-          <a href="/notes/fifty-five-alerts" className="text-accent hover:underline">fifty-five alerts →</a>
-        </div>
+
       </header>
 
       <section className="rounded-xl border border-edge bg-panel p-4">

@@ -60,9 +60,26 @@ html = html.replace(
 // Tables and code need their own scroll container so the page never scrolls.
 html = html.replace(/<table>/g, '<div class="tablewrap"><table>').replace(/<\/table>/g, "</table></div>");
 
-const rail = sections
-  .map((s) => `<li><a href="#${s.id}">${s.title}</a></li>`)
-  .join("\n        ");
+const toc = sections
+  .map((s) => `        <li><a href="#${s.id}">${s.title}</a></li>`)
+  .join("\n");
+
+const TOOL: [string, string][] = [
+  ["/", "Inspector"],
+  ["/compare", "Pipeline comparison"],
+  ["/monitors", "Monitors"],
+];
+const READING: [string, string][] = [
+  ["/guide", "Ad insertion"],
+  ["/streaming", "Delivery chain"],
+  ["/notes/fifty-five-alerts", "Fifty-five alerts"],
+];
+const links = (items: [string, string][]) =>
+  items
+    .map(([href, label]) =>
+      `        <li><a href="${href}"${href === "/streaming" ? ' aria-current="page"' : ""}>${label}</a></li>`,
+    )
+    .join("\n");
 
 const page = `<!doctype html>
 <html lang="en">
@@ -73,77 +90,61 @@ const page = `<!doctype html>
 <meta name="description" content="How video actually reaches a player: the ABR ladder, packaging, HLS, DASH, low latency, origin and CDN — and what goes wrong at each handoff.">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-icon.png">
+<link rel="stylesheet" href="/reading.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="/reading.css">
-<style>
-  /* This page is a reference with a rail, like the ad insertion guide. */
-  .layout { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 56px; align-items: start; }
-  nav.rail { position: sticky; top: 24px; font-family: var(--display); font-size: 13.5px; line-height: 1.45; }
-  nav.rail h2 {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--ink-faint); font-weight: 500; margin: 0 0 14px;
-  }
-  nav.rail ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; counter-reset: rail; }
-  nav.rail a {
-    color: var(--ink-soft); text-decoration: none; display: grid; grid-template-columns: 22px 1fr;
-    gap: 6px; padding-block: 2px; border-left: 2px solid transparent; padding-left: 10px; margin-left: -12px;
-  }
-  nav.rail a::before {
-    counter-increment: rail; content: counter(rail, decimal-leading-zero);
-    font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); padding-top: 2px;
-  }
-  nav.rail a:hover { color: var(--accent); border-left-color: var(--accent); }
-  @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; gap: 0; }
-    nav.rail {
-      position: static; border: 1px solid var(--rule); border-radius: 4px;
-      padding: 18px 20px; margin-bottom: 44px; background: var(--surface);
-    }
-    nav.rail ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 20px; }
-  }
-</style>
 </head>
 <body>
 
 <div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
 
-<div class="toolbar">
-  <div>
-    <a class="brand" href="/">Splice<span>Check</span></a>
-    <a href="/">Inspector</a>
-    <a href="/compare">Pipeline comparison</a>
-    <a href="/monitors">Monitors</a>
-    <a href="/guide">Ad insertion</a>
-    <a href="/notes/fifty-five-alerts">Fifty-five alerts</a>
-    <span class="spacer"></span>
-    <a href="https://github.com/sthavana/splicecheck">Source</a>
-  </div>
-</div>
+<div class="site-shell">
+  <nav class="site-nav" aria-label="Site">
+    <a class="site-nav-brand" href="/">Splice<span>Check</span></a>
 
-<div class="shell wide">
+    <div class="site-nav-group">
+      <h2>Tool</h2>
+      <ul>
+${links(TOOL)}
+      </ul>
+    </div>
 
-<header class="masthead">
-  <p class="eyebrow">Streaming video · reference</p>
-  <h1>How a stream gets to a viewer</h1>
-  <p class="standfirst">Four systems, four handoffs, and a manifest that is the
-  only thing a player ever sees. What each stage promises — and what it looks
-  like from outside when one of them stops keeping its promise.</p>
-</header>
+    <div class="site-nav-group">
+      <h2>Reading</h2>
+      <ul>
+${links(READING)}
+      </ul>
+    </div>
 
-<div class="layout">
-  <nav class="rail" aria-label="Contents">
-    <h2>Contents</h2>
-    <ol>
-        ${rail}
-    </ol>
+    <div class="site-nav-toc">
+      <h2>On this page</h2>
+      <ol>
+${toc}
+      </ol>
+    </div>
+
+    <div class="site-nav-foot">
+      <a href="https://github.com/sthavana/splicecheck">Source</a>
+    </div>
   </nav>
 
-  <main>
+  <div class="site-main">
+    <div class="shell wide">
+
+      <header class="masthead">
+        <p class="eyebrow">Streaming video · reference</p>
+        <h1>How a stream gets to a viewer</h1>
+        <p class="standfirst">Four systems, four handoffs, and a manifest that is the
+        only thing a player ever sees. What each stage promises — and what it looks
+        like from outside when one of them stops keeping its promise.</p>
+      </header>
+
+      <main>
 ${html}
-  </main>
-</div>
+      </main>
+    </div>
+  </div>
 </div>
 </body>
 </html>

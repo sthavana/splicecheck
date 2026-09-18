@@ -225,3 +225,77 @@ footer.colophon {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ------------------------------------------------------------- site nav --
+ * Matches the tool's rail so the whole site navigates the same way. On a
+ * reference page the section contents sit under it, rather than in a second
+ * column, which would give the page two left rails.
+ */
+
+.site-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); align-items: start; }
+
+.site-nav {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  border-right: 1px solid var(--rule); background: var(--surface);
+  padding: 22px 20px 20px;
+  display: flex; flex-direction: column; gap: 26px;
+  font-family: var(--display);
+}
+.site-nav-brand {
+  font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
+  color: var(--ink); text-decoration: none;
+}
+.site-nav-brand span { color: var(--accent); }
+
+.site-nav-group h2 {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 8px;
+}
+.site-nav-group ul, .site-nav-toc ol {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;
+}
+.site-nav-group a {
+  display: block; font-size: 13.5px; line-height: 1.35; color: var(--ink-soft);
+  text-decoration: none; padding: 5px 9px; margin-inline: -9px; border-radius: 6px;
+}
+.site-nav-group a:hover { background: var(--surface-alt); color: var(--ink); }
+.site-nav-group a[aria-current="page"] {
+  background: var(--surface-alt); color: var(--ink); font-weight: 600;
+}
+
+.site-nav-toc { counter-reset: toc; }
+.site-nav-toc h2 {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 8px;
+}
+.site-nav-toc a {
+  display: grid; grid-template-columns: 20px 1fr; gap: 6px;
+  font-size: 13px; line-height: 1.35; color: var(--ink-soft);
+  text-decoration: none; padding: 4px 0;
+}
+.site-nav-toc a::before {
+  counter-increment: toc; content: counter(toc, decimal-leading-zero);
+  font-family: var(--mono); font-size: 10px; color: var(--ink-faint); padding-top: 2px;
+}
+.site-nav-toc a:hover { color: var(--accent); }
+
+.site-nav-foot {
+  margin-top: auto; padding-top: 18px; border-top: 1px solid var(--rule);
+}
+.site-nav-foot a { font-size: 13px; color: var(--ink-faint); text-decoration: none; }
+.site-nav-foot a:hover { color: var(--accent); }
+
+@media (max-width: 900px) {
+  .site-shell { grid-template-columns: 1fr; }
+  .site-nav {
+    position: static; height: auto; border-right: none;
+    border-bottom: 1px solid var(--rule);
+    flex-direction: row; flex-wrap: wrap; align-items: center;
+    gap: 10px 20px; padding: 12px 20px;
+  }
+  .site-nav-group { display: flex; align-items: center; gap: 10px; }
+  .site-nav-group h2 { margin: 0; }
+  .site-nav-group ul { flex-direction: row; flex-wrap: wrap; gap: 2px 4px; }
+  .site-nav-toc { display: none; }
+  .site-nav-foot { margin-top: 0; padding-top: 0; border-top: none; margin-left: auto; }
+}
