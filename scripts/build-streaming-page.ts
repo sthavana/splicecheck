@@ -64,22 +64,52 @@ const toc = sections
   .map((s) => `        <li><a href="#${s.id}">${s.title}</a></li>`)
   .join("\n");
 
-const TOOL: [string, string][] = [
-  ["/", "Inspector"],
-  ["/compare", "Pipeline comparison"],
-  ["/monitors", "Monitors"],
+interface NavGroup {
+  title: string;
+  note: string;
+  items: [string, string][];
+}
+
+const GROUPS: NavGroup[] = [
+  {
+    title: "Tool",
+    note: "Point it at a live stream",
+    items: [
+      ["/", "Inspector"],
+      ["/compare", "Pipeline comparison"],
+      ["/monitors", "Monitors"],
+    ],
+  },
+  {
+    title: "Simulator",
+    note: "Build a stream, then break it",
+    items: [["/simulator", "Chain simulator"]],
+  },
+  {
+    title: "Reading",
+    note: "How the chain works",
+    items: [
+      ["/guide", "Ad insertion"],
+      ["/streaming", "Delivery chain"],
+      ["/notes/fifty-five-alerts", "Fifty-five alerts"],
+    ],
+  },
 ];
-const READING: [string, string][] = [
-  ["/guide", "Ad insertion"],
-  ["/streaming", "Delivery chain"],
-  ["/notes/fifty-five-alerts", "Fifty-five alerts"],
-];
-const links = (items: [string, string][]) =>
-  items
-    .map(([href, label]) =>
+
+const nav = GROUPS.map(
+  (g) => `    <div class="site-nav-group">
+      <h2>${g.title}</h2>
+      <p class="site-nav-note">${g.note}</p>
+      <ul>
+${g.items
+  .map(
+    ([href, label]) =>
       `        <li><a href="${href}"${href === "/streaming" ? ' aria-current="page"' : ""}>${label}</a></li>`,
-    )
-    .join("\n");
+  )
+  .join("\n")}
+      </ul>
+    </div>`,
+).join("\n\n");
 
 const page = `<!doctype html>
 <html lang="en">
@@ -104,19 +134,7 @@ const page = `<!doctype html>
   <nav class="site-nav" aria-label="Site">
     <a class="site-nav-brand" href="/">Splice<span>Check</span></a>
 
-    <div class="site-nav-group">
-      <h2>Tool</h2>
-      <ul>
-${links(TOOL)}
-      </ul>
-    </div>
-
-    <div class="site-nav-group">
-      <h2>Reading</h2>
-      <ul>
-${links(READING)}
-      </ul>
-    </div>
+${nav}
 
     <div class="site-nav-toc">
       <h2>On this page</h2>

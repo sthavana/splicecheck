@@ -253,25 +253,83 @@ footer.colophon {
 .site-nav-brand span { color: var(--accent); }
 
 .site-nav-group h2 {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 600;
+  margin: 0 0 3px;
 }
-.site-nav-group ul, .site-nav-toc ol {
-  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;
+/* A hairline carries the heading across the rail, so the groups read as
+   sections rather than as three lists that happen to be stacked. */
+.site-nav-group h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+.site-nav-note {
+  margin: 0 0 9px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+.site-nav-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 .site-nav-group a {
-  display: block; font-size: 13.5px; line-height: 1.35; color: var(--ink-soft);
-  text-decoration: none; padding: 5px 9px; margin-inline: -9px; border-radius: 6px;
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding: 6px 9px;
+  margin-inline: -9px;
+  border-radius: 6px;
+  border-left: 2px solid transparent;
 }
 .site-nav-group a:hover { background: var(--surface-alt); color: var(--ink); }
 .site-nav-group a[aria-current="page"] {
-  background: var(--surface-alt); color: var(--ink); font-weight: 600;
+  background: var(--surface-alt);
+  color: var(--ink);
+  font-weight: 600;
+  border-left-color: var(--accent);
 }
 
 .site-nav-toc { counter-reset: toc; }
+/* The ::before below supplies the numbering, so the list must not also
+   render its own markers. */
+.site-nav-toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
 .site-nav-toc h2 {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.site-nav-toc h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
 }
 .site-nav-toc a {
   display: grid; grid-template-columns: 20px 1fr; gap: 6px;

@@ -172,7 +172,7 @@ body {
   padding: 22px 18px 18px;
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 22px;
 }
 
 .site-nav-brand {
@@ -185,12 +185,29 @@ body {
 .site-nav-brand span { color: var(--accent); }
 
 .site-nav-group h2 {
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 10px;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--muted);
-  font-weight: 500;
-  margin: 0 0 8px;
+  font-weight: 600;
+  margin: 0 0 3px;
+}
+/* A hairline carries the heading across the rail, so the groups read as
+   sections rather than as three lists that happen to be stacked. */
+.site-nav-group h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.site-nav-note {
+  margin: 0 0 9px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
 }
 .site-nav-group ul {
   list-style: none;
@@ -198,7 +215,7 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .site-nav-group a {
   display: block;
@@ -206,15 +223,17 @@ body {
   line-height: 1.35;
   color: var(--soft);
   text-decoration: none;
-  padding: 5px 9px;
+  padding: 6px 9px;
   margin-inline: -9px;
   border-radius: 6px;
+  border-left: 2px solid transparent;
 }
 .site-nav-group a:hover { background: var(--raise); color: var(--foreground); }
 .site-nav-group a[aria-current="page"] {
   background: var(--raise-strong);
   color: var(--foreground);
-  font-weight: 500;
+  font-weight: 600;
+  border-left-color: var(--accent);
 }
 
 .site-nav-foot {
