@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { findEmsgBoxes, readBaseMediaDecodeTime, readBoxes } from "../src/lib/mp4";
 import { readId3Pes, scanTransportStream, looksLikeTransportStream } from "../src/lib/ts";
-import { readSegment, compareWithManifest, type SegmentProbe } from "../src/lib/segments";
+import { readSegment, compareWithManifest, resolveDashSegments, type SegmentProbe } from "../src/lib/segments";
+import { fillTemplate, parseMpd } from "../src/lib/dash";
+import { analyzeText } from "../src/lib/runner";
 import { parseSpliceInfoSection } from "../src/lib/scte35";
 import type { RenditionAnalysis } from "../src/lib/analyze";
 
@@ -120,9 +122,11 @@ test("agreement: matching signals report nothing", () => {
 });
 
 test("agreement: a cue the packager never transcribed is an error", () => {
+  // The manifest transcribes one avail and misses another, which is what
+  // makes the miss a fault rather than a design.
   const findings = compareWithManifest(
-    rendition([]),
-    probeOf([{ carriage: "mpeg-ts", segmentUri: "a.ts", hex: "", eventId: 99, pdt: T, outOfNetwork: true, section: { crcValid: true } as never }]),
+    rendition([{ index: 0, startTime: 0, pdt: T, eventId: 1, segmentCount: 1, closed: true, inProgress: false, outLine: 0, outTag: "", discontinuityAtStart: true, discontinuityAtEnd: true }]),
+    probeOf([{ carriage: "mpeg-ts", segmentUri: "a.ts", hex: "", eventId: 99, pdt: T + 600_000, outOfNetwork: true, section: { crcValid: true } as never }]),
   );
   assert.ok(findings.some((f) => f.code === "INBAND_SIGNAL_NOT_IN_MANIFEST"));
 });
@@ -146,4 +150,118 @@ test("agreement: says so when the manifest is the only carriage", () => {
   assert.ok(f);
   assert.equal(f.severity, "info");
   assert.match(f.detail, /nothing to check the manifest against/);
+});
+
+// ---------------------------------------------------------------- DASH ----
+
+test("fills SegmentTemplate identifiers, including printf widths", () => {
+  assert.equal(
+    fillTemplate("$RepresentationID$/$Number$.m4s", { RepresentationID: "V300", Number: 42 }),
+    "V300/42.m4s",
+  );
+  assert.equal(
+    fillTemplate("v/seg_$Number%05d$.m4s", { Number: 42 }),
+    "v/seg_00042.m4s",
+    "a fixed-width number is what some packagers name files by",
+  );
+  assert.equal(fillTemplate("$RepresentationID$_$Time$.m4v", { RepresentationID: "v1", Time: 900 }), "v1_900.m4v");
+  assert.equal(fillTemplate("a$$b", {}), "a$b", "$$ is an escaped dollar");
+});
+
+test("resolves segment URLs from a timeline", () => {
+  const mpd = parseMpd(readFileSync("fixtures/samples/multiperiod-dash/manifest.mpd", "utf8"), "https://cdn.example.com/live/manifest.mpd");
+  const period = mpd.periods[1];
+  const video = period.adaptationSets.find((a) => a.mimeType?.startsWith("video"))!;
+  const { init, segments } = resolveDashSegments(mpd, period, video);
+
+  assert.match(init!, /^https:\/\/cdn\.example\.com\/live\/video-360_init\.m4i$/);
+  assert.ok(segments.length > 0);
+  assert.match(segments[0].url, /^https:\/\/cdn\.example\.com\/live\/video-360_\d+\.m4v$/);
+  // Segment start times must land on the period, not on some other frame.
+  assert.ok(Math.abs(segments[0].start - period.start) < 0.001);
+  assert.ok(segments.every((s) => s.pdt !== undefined), "availabilityStartTime makes these wall-clock addressable");
+});
+
+test("resolves segment URLs for a number-addressed stream", () => {
+  // SegmentTemplate with @duration and no timeline: the numbers have to be
+  // derived from startNumber and presentationTimeOffset.
+  const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" availabilityStartTime="1970-01-01T00:00:00Z"
+     mediaPresentationDuration="PT20S">
+  <Period id="p0" start="PT0S" duration="PT20S">
+    <AdaptationSet mimeType="video/mp4" id="0">
+      <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4"
+                       duration="2" startNumber="100" presentationTimeOffset="200" timescale="1"/>
+      <Representation id="V300" bandwidth="300000" codecs="avc1.64001e" width="640" height="360"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+  const mpd = parseMpd(xml, "https://example.com/live/Manifest.mpd");
+  const period = mpd.periods[0];
+  const video = period.adaptationSets[0];
+  assert.equal(video.usesTimeline, false);
+  assert.equal(video.segmentDuration, 2);
+
+  const { segments } = resolveDashSegments(mpd, period, video);
+  assert.ok(segments.length > 0, "a number-addressed stream must still be addressable");
+  // startNumber addresses the first segment of the period…
+  assert.match(segments[0].url, /V300\/100\.m4s$/);
+  // …and `start` is presentation time, which begins at the period's own start.
+  // The 200 from presentationTimeOffset is media time, a different frame.
+  assert.equal(segments[0].start, 0);
+  assert.equal(segments[1].start, 2);
+});
+
+test("a number-addressed period is not reported as empty", () => {
+  // There is no timeline to total up, which is not the same as no media.
+  const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT10S">
+  <Period id="p0" start="PT0S" duration="PT10S">
+    <AdaptationSet mimeType="video/mp4" id="0">
+      <SegmentTemplate media="$Number$.m4s" duration="2" startNumber="1" timescale="1"/>
+      <Representation id="v" bandwidth="1" codecs="avc1.64001e"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+  const r = analyzeText(xml, "number-addressed.mpd");
+  assert.ok(!r.renditions[0].findings.some((f) => f.code === "EMPTY_PERIOD"));
+});
+
+test("a stream declaring SCTE-35 inband says so", () => {
+  const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="dynamic" availabilityStartTime="1970-01-01T00:00:00Z"
+     minimumUpdatePeriod="PT2S" timeShiftBufferDepth="PT60S">
+  <Period id="p0" start="PT0S">
+    <AdaptationSet mimeType="video/mp4" id="0">
+      <InbandEventStream schemeIdUri="urn:scte:scte35:2013:bin"/>
+      <SegmentTemplate media="$Number$.m4s" duration="2" startNumber="0" timescale="1"/>
+      <Representation id="v" bandwidth="1" codecs="avc1.64001e"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+  const r = analyzeText(xml, "inband.mpd");
+  const f = r.renditions[0].findings.find((x) => x.code === "INBAND_EVENT_STREAM_DECLARED");
+  assert.ok(f, "the manifest is telling you it is not the whole story");
+  assert.match(f.detail, /a manifest-only view of this stream will always report no ad signalling/);
+});
+
+test("agreement: inband-only signalling is a design, not a dropped cue", () => {
+  // When the manifest carries no avails at all it was never transcribing, so
+  // a cue that exists only in the segments is not something the packager lost.
+  const findings = compareWithManifest(
+    rendition([]),
+    probeOf([{ carriage: "emsg", segmentUri: "a.m4s", hex: "", eventId: 7, pdt: T, outOfNetwork: true, section: { crcValid: true } as never }]),
+  );
+  const f = findings.find((x) => x.code === "INBAND_ONLY_SIGNALLING");
+  assert.ok(f);
+  assert.equal(f.severity, "info");
+  assert.ok(!findings.some((x) => x.code === "INBAND_SIGNAL_NOT_IN_MANIFEST"));
+});
+
+test("agreement: a dropped cue is still an error when the manifest transcribes others", () => {
+  const findings = compareWithManifest(
+    rendition([{ index: 0, startTime: 0, pdt: T, eventId: 1, segmentCount: 1, closed: true, inProgress: false, outLine: 0, outTag: "", discontinuityAtStart: true, discontinuityAtEnd: true }]),
+    probeOf([{ carriage: "emsg", segmentUri: "a.m4s", hex: "", eventId: 7, pdt: T + 600_000, outOfNetwork: true, section: { crcValid: true } as never }]),
+  );
+  assert.ok(findings.some((x) => x.code === "INBAND_SIGNAL_NOT_IN_MANIFEST"));
 });

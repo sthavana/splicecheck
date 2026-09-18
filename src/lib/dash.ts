@@ -25,6 +25,16 @@ export interface DashRepresentation {
   audioSamplingRate?: string;
 }
 
+/** One entry of an expanded SegmentTimeline. */
+export interface DashSegmentEntry {
+  /** start time in the adaptation set's timescale */
+  t: number;
+  /** duration in the adaptation set's timescale */
+  d: number;
+  /** segment number, for $Number$ templates */
+  number: number;
+}
+
 export interface DashAdaptationSet {
   id?: string;
   mimeType?: string;
@@ -40,8 +50,22 @@ export interface DashAdaptationSet {
   representations: DashRepresentation[];
   /** SegmentTemplate@media, which points at where the media actually lives */
   mediaTemplate?: string;
+  /** SegmentTemplate@initialization */
+  initTemplate?: string;
+  /** SegmentTemplate@startNumber, defaulting to 1 */
+  startNumber: number;
+  /** BaseURL chain that media references resolve against */
+  baseUrl?: string;
+  /** expanded timeline, bounded so a long DVR window cannot blow up memory */
+  segments: DashSegmentEntry[];
+  /** SegmentTemplate@duration, for streams addressed by number rather than time */
+  segmentDuration?: number;
+  /** whether a SegmentTimeline was present at all */
+  usesTimeline: boolean;
   supplementalProperties: string[];
   essentialProperties: string[];
+  /** schemes this set declares it carries inband, as InbandEventStream */
+  inbandEventSchemes: string[];
 }
 
 export interface DashEvent {
@@ -116,6 +140,50 @@ function arr<T>(v: T | T[] | undefined): T[] {
   return Array.isArray(v) ? v : [v];
 }
 
+/** BaseURL is inherited down the MPD, so resolve the chain that applies here. */
+function baseUrlFor(
+  mpd: Record<string, unknown>,
+  period: Record<string, unknown>,
+  as: Record<string, unknown>,
+): string | undefined {
+  const parts: string[] = [];
+  for (const node of [mpd, period, as]) {
+    const b = child(node, "BaseURL");
+    const first = Array.isArray(b) ? b[0] : b;
+    const value =
+      typeof first === "string"
+        ? first
+        : first && typeof first === "object"
+          ? String((first as Record<string, unknown>)["#text"] ?? "")
+          : "";
+    if (value) parts.push(value);
+  }
+  return parts.length ? parts.join("") : undefined;
+}
+
+/**
+ * Fills a SegmentTemplate. Identifiers may carry a printf-style width, as in
+ * `$Number%05d$`, which some packagers rely on for fixed-length filenames.
+ */
+export function fillTemplate(
+  template: string,
+  vars: { RepresentationID?: string; Number?: number; Time?: number; Bandwidth?: number },
+): string {
+  // `$$` is an escaped dollar and must be matched before an identifier, or a
+  // literal dollar in a path swallows the next token.
+  return template.replace(/\$\$|\$([A-Za-z]+)(%0\d+[du])?\$/g, (m, name?: string, fmt?: string) => {
+    if (m === "$$") return "$";
+    if (!name) return m;
+    const value = (vars as Record<string, string | number | undefined>)[name];
+    if (value === undefined) return "";
+    if (fmt) {
+      const width = Number(/%0(\d+)/.exec(fmt)?.[1] ?? 0);
+      return String(value).padStart(width, "0");
+    }
+    return String(value);
+  });
+}
+
 export function isMpd(text: string): boolean {
   return /<MPD[\s>]/.test(text.slice(0, 4000));
 }
@@ -128,7 +196,7 @@ const parser = new XMLParser({
   trimValues: true,
   // Elements that must stay arrays even when a single one appears.
   isArray: (name) =>
-    ["Period", "AdaptationSet", "Representation", "EventStream", "Event", "S", "SupplementalProperty", "EssentialProperty", "AssetIdentifier"].includes(
+    ["Period", "AdaptationSet", "Representation", "EventStream", "Event", "S", "SupplementalProperty", "EssentialProperty", "AssetIdentifier", "InbandEventStream"].includes(
       name.replace(/^.*:/, ""),
     ),
 });
@@ -188,14 +256,22 @@ function parseSegmentTiming(as: Record<string, unknown>): {
   duration: number;
   count: number;
   media?: string;
+  init?: string;
+  startNumber: number;
+  entries: DashSegmentEntry[];
+  segmentDuration?: number;
+  usesTimeline: boolean;
 } {
   const tpl = (child(as, "SegmentTemplate") ?? child(as, "SegmentList")) as
     | Record<string, unknown>
     | undefined;
-  if (!tpl) return { timescale: 1, pto: 0, duration: 0, count: 0 };
+  if (!tpl) return { timescale: 1, pto: 0, duration: 0, count: 0, startNumber: 1, entries: [], usesTimeline: false };
   const timescale = num(pick(tpl, "timescale")) ?? 1;
   const pto = num(pick(tpl, "presentationTimeOffset")) ?? 0;
   const media = pick(tpl, "media") !== undefined ? String(pick(tpl, "media")) : undefined;
+  const init = pick(tpl, "initialization") !== undefined ? String(pick(tpl, "initialization")) : undefined;
+  const startNumber = num(pick(tpl, "startNumber")) ?? 1;
+  const MAX_ENTRIES = 5000;
 
   const timeline = child(tpl, "SegmentTimeline") as Record<string, unknown> | undefined;
   if (timeline) {
@@ -204,6 +280,8 @@ function parseSegmentTiming(as: Record<string, unknown>): {
     let count = 0;
     let first: number | undefined;
     let cursor: number | undefined;
+    let number = startNumber;
+    const entries: DashSegmentEntry[] = [];
     for (const S of Ss) {
       const t = num(pick(S, "t"));
       const d = num(pick(S, "d")) ?? 0;
@@ -211,19 +289,27 @@ function parseSegmentTiming(as: Record<string, unknown>): {
       if (t !== undefined) cursor = t;
       if (first === undefined) first = cursor;
       const reps = r < 0 ? 1 : r + 1; // negative @r means "until the next @t"; count it once
+      for (let i = 0; i < reps && entries.length < MAX_ENTRIES; i++) {
+        if (cursor !== undefined) entries.push({ t: cursor + i * d, d, number: number + i });
+      }
       total += d * reps;
       count += reps;
+      number += reps;
       if (cursor !== undefined) cursor += d * reps;
     }
-    return { timescale, pto, first, duration: total / timescale, count, media };
+    return { timescale, pto, first, duration: total / timescale, count, media, init, startNumber, entries, usesTimeline: true };
   }
 
-  // SegmentTemplate with @duration and no timeline.
+  // SegmentTemplate with @duration and no timeline: segments are uniform, and
+  // their numbers run from @startNumber.
   const d = num(pick(tpl, "duration"));
   if (d !== undefined) {
-    return { timescale, pto, first: pto, duration: 0, count: 0, media };
+    return {
+      timescale, pto, first: pto, duration: 0, count: 0, media, init, startNumber,
+      entries: [], segmentDuration: d, usesTimeline: false,
+    };
   }
-  return { timescale, pto, duration: 0, count: 0, media };
+  return { timescale, pto, duration: 0, count: 0, media, init, startNumber, entries: [], usesTimeline: false };
 }
 
 export function parseMpd(text: string, uri: string): MpdDocument {
@@ -274,8 +360,15 @@ export function parseMpd(text: string, uri: string): MpdDocument {
         segmentCount: timing.count,
         representations: reps,
         mediaTemplate: timing.media,
+        initTemplate: timing.init,
+        startNumber: timing.startNumber,
+        baseUrl: baseUrlFor(mpd, p, as),
+        segments: timing.entries,
+        segmentDuration: timing.segmentDuration,
+        usesTimeline: timing.usesTimeline,
         supplementalProperties: schemeList(as, "SupplementalProperty"),
         essentialProperties: schemeList(as, "EssentialProperty"),
+        inbandEventSchemes: schemeList(as, "InbandEventStream"),
       };
     });
 
@@ -315,7 +408,11 @@ export function parseMpd(text: string, uri: string): MpdDocument {
     // is one. Audio timelines legitimately differ by a frame or two, and
     // mixing them in produces phantom sub-frame gaps at every boundary.
     const video = withMedia.find((a) => a.mimeType?.startsWith("video")) ?? withMedia[0];
-    const mediaDuration = video ? video.mediaDuration : (declaredDuration ?? 0);
+    const anyTemplate = adaptationSets.find((a) => a.mediaTemplate);
+    const mediaDuration = video
+      ? video.mediaDuration
+      : // Number-addressed segments have no timeline to total up.
+        (declaredDuration ?? (anyTemplate?.segmentDuration !== undefined ? NaN : 0));
     const mediaStart =
       video && video.firstSegmentTime !== undefined
         ? video.firstSegmentTime / video.timescale
@@ -340,6 +437,14 @@ export function parseMpd(text: string, uri: string): MpdDocument {
     });
 
     runningStart = start + (declaredDuration ?? mediaDuration);
+  });
+
+  // A period whose extent could not be measured takes it from where the next
+  // one begins; the last such period runs to the end of the presentation.
+  periods.forEach((p, i) => {
+    if (!Number.isNaN(p.mediaDuration)) return;
+    const next = periods[i + 1];
+    p.mediaDuration = next ? Math.max(0, next.start - p.start) : 0;
   });
 
   return {

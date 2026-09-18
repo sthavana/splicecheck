@@ -106,7 +106,7 @@ Those two can disagree, and nothing in a manifest-only view can see it.
 ```
 
 opens the segments, reads the cues actually carried in them, and checks they
-agree with the manifest:
+agree with the manifest — for HLS and for DASH:
 
 ```
   segments: 6/6 read · 0.86MB · mpeg-ts · 3 inband cues
@@ -122,6 +122,29 @@ agree with the manifest:
 | ID3 `PRIV` frame in a metadata PES (`stream_type` 0x15) | how HLS transport streams usually carry it |
 | Section on a `stream_type` 0x86 PID | the broadcast form, straight out of the encoder |
 
+HLS lists its segments outright. DASH does not, so the URLs are built from the
+`SegmentTemplate`: `$RepresentationID$`, `$Number$`, `$Time$` and `$Bandwidth$`
+with printf widths, the `BaseURL` chain, timelines, and streams addressed by
+`@duration` where the segment numbers have to be derived from `@startNumber`
+and `@presentationTimeOffset`.
+
+Pointed at the DASH-IF reference stream, which signals inband only:
+
+```
+$ ./dist/cli.mjs https://livesim2.dashif.org/livesim2/scte35_1/testpic_2s/Manifest.mpd --segments 8
+
+  DASH · 1 rendition · 0 ad breaks · 60s window
+
+  segments: 32/32 read · 1.16MB · cmaf · 1 inband cue
+    2026-09-18T15:01:10.000Z  event 1789743670  20s  urn:scte:scte35:2013:bin
+
+  · SCTE-35 is declared inband INBAND_EVENT_STREAM_DECLARED
+  · Avail at 2026-09-18T15:01:10.000Z exists only in the segments INBAND_ONLY_SIGNALLING
+```
+
+A manifest-only tool reports that stream as having no ad breaks at all. It has
+one; it is in the media.
+
 **What it can then say**
 
 | Code | What it catches |
@@ -131,6 +154,14 @@ agree with the manifest:
 | `INBAND_MANIFEST_EVENT_ID_MISMATCH` | The same avail counted as two different events in reporting |
 | `INBAND_SCTE35_CRC_INVALID` | A bad CRC *at the encoder*, which distinguishes an upstream fault from one the packager introduced |
 | `NO_INBAND_SCTE35` | The manifest is the only carriage, so there is nothing to check it against |
+| `INBAND_EVENT_STREAM_DECLARED` | The manifest says the segments carry SCTE-35, so a manifest-only view is incomplete by construction |
+| `INBAND_ONLY_SIGNALLING` | An avail exists only in the media. Not a dropped cue — the manifest was never transcribing — but anything reading the manifest will see no break |
+
+A cue can sit in one segment out of thirty. Where the manifest carries avails
+the search aims at them, but where it carries none there is nothing to aim at,
+so the window is scanned instead — and a null result reports what fraction of
+it was actually read, because "no cues found" in eight of thirty segments means
+very little.
 
 Getting the timing right is the whole exercise. Program date-time names a
 segment's first **presentation** timestamp; the PCR leads it by the decoder
@@ -307,7 +338,7 @@ Takes a URL or a path, so it works against a live origin or a captured manifest.
 | `--strict` | exit non-zero on warnings as well as errors |
 | `--quiet` | findings only, without the explanation of each |
 | `--variants <n>` | maximum HLS renditions to fetch |
-| `--segments [n]` | open n segments and read the SCTE-35 inside them |
+| `--segments [n]` | open n segments and read the SCTE-35 inside them (HLS and DASH) |
 
 Exit codes make it usable as a gate: **0** no errors, **1** problems found,
 **2** could not analyse the input. CI runs it against the defect fixtures on
@@ -357,8 +388,9 @@ would need a hosted database and a cron route instead.
 ## Not done yet
 
 - HLS interstitials (`EXT-X-DATERANGE` with `CLASS="com.apple.hls.interstitial"`)
-- Reading segments for DASH as well as HLS — the parsers handle `emsg`, but
-  resolving a `SegmentTemplate` to segment URLs is not wired up yet
+- SCTE-224, the policy layer above SCTE-35
+- Continuous pipeline comparison, so fill rate becomes a tracked metric rather
+  than a spot check
 - Per-creative breakdown inside a filled avail — which creatives ran, and
   whether the pod was assembled as the ad server intended
 - Running the pipeline comparison continuously, so fill rate becomes a tracked

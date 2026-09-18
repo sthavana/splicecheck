@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeText, analyzeUrl, DEFAULT_MAX_VARIANTS } from "@/lib/runner";
 import { getSample, recordedFetcher, sampleEntryUrl } from "@/lib/samples";
-import { probeRendition } from "@/lib/segments";
+import { probeMpd, probeRendition } from "@/lib/segments";
 
 export const maxDuration = 60;
 
@@ -43,18 +43,26 @@ export async function POST(req: NextRequest) {
 
     // Reading segments costs megabytes and seconds, so it is opt-in.
     const wanted = Math.min(Math.max(body.probeSegments ?? 0, 0), 12);
-    if (wanted > 0 && result.renditions[0]?.protocol === "hls") {
+    const first = result.renditions[0];
+    // The manifest text is only needed server-side, to build DASH segment URLs.
+    const { raw, ...response } = result;
+    if (wanted > 0 && first) {
       try {
-        const probe = await probeRendition(result.renditions[0], { maxSegments: wanted });
-        return NextResponse.json({ ...result, probe });
+        const probe =
+          first.protocol === "hls"
+            ? await probeRendition(first, { maxSegments: wanted })
+            : raw
+              ? await probeMpd(raw.text, raw.uri, first, { maxSegments: wanted })
+              : undefined;
+        if (probe) return NextResponse.json({ ...response, probe });
       } catch (e) {
         return NextResponse.json({
-          ...result,
+          ...response,
           probeError: e instanceof Error ? e.message : "could not read segments",
         });
       }
     }
-    return NextResponse.json(result);
+    return NextResponse.json(response);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Analysis failed" }, { status: 400 });
   }

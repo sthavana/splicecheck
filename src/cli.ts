@@ -10,7 +10,7 @@
 import { readFile } from "node:fs/promises";
 import { analyzeText, analyzeUrl, type RunResult } from "./lib/runner";
 import { comparePipeline } from "./lib/pipeline";
-import { probeRendition, type SegmentProbe } from "./lib/segments";
+import { probeMpd, probeRendition, type SegmentProbe } from "./lib/segments";
 import type { Finding } from "./lib/analyze";
 
 const useColour =
@@ -179,11 +179,16 @@ function printProbe(probe: SegmentProbe) {
 async function runAnalyse(target: string, opts: Options): Promise<number> {
   const r = await load(target, opts);
   let probe: SegmentProbe | undefined;
-  if (opts.segments > 0 && r.renditions[0]?.protocol === "hls") {
-    probe = await probeRendition(r.renditions[0], { maxSegments: opts.segments });
+  const first = r.renditions[0];
+  if (opts.segments > 0 && first) {
+    if (first.protocol === "hls") {
+      probe = await probeRendition(first, { maxSegments: opts.segments });
+    } else if (first.protocol === "dash" && r.raw) {
+      probe = await probeMpd(r.raw.text, r.raw.uri, first, { maxSegments: opts.segments });
+    }
   }
   if (opts.json) {
-    process.stdout.write(JSON.stringify({ ...r, probe }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ ...r, raw: undefined, probe }, null, 2) + "\n");
   } else {
     const first = r.renditions[0];
     process.stdout.write(`\n${c.bold(r.sourceUri)}\n`);
@@ -205,8 +210,16 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
       printFindings(all, opts.quiet);
       process.stdout.write("\n");
     }
+    // The verdict must account for what the segments said, or the summary
+    // contradicts the findings printed directly above it.
+    const pErrors = probe?.findings.filter((f) => f.severity === "error").length ?? 0;
+    const pWarnings = probe?.findings.filter((f) => f.severity === "warning").length ?? 0;
+    const pInfos = probe?.findings.filter((f) => f.severity === "info").length ?? 0;
+    const errors = r.summary.errors + pErrors;
+    const warnings = r.summary.warnings + pWarnings;
+    const verdict = errors > 0 ? "fail" : warnings > 0 ? "warn" : "pass";
     process.stdout.write(
-      `  ${verdictLine(r.summary.verdict, r.summary.errors, r.summary.warnings, r.summary.infos)}\n\n`,
+      `  ${verdictLine(verdict, errors, warnings, r.summary.infos + pInfos)}\n\n`,
     );
   }
   const probeErrors = probe?.findings.filter((f) => f.severity === "error").length ?? 0;

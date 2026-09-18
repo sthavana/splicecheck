@@ -31,7 +31,15 @@ export interface SourceMeta {
   };
 }
 
-export type RunResult = AnalysisResult & { meta: SourceMeta };
+export type RunResult = AnalysisResult & {
+  meta: SourceMeta;
+  /**
+   * The manifest as fetched. Segment reading for DASH has to build URLs from
+   * the SegmentTemplate, and re-fetching a live manifest would give a slightly
+   * different window than the one just analysed.
+   */
+  raw?: { text: string; uri: string };
+};
 
 /**
  * How a manifest is retrieved. Injected so the same analysis can run against
@@ -125,6 +133,7 @@ export function analyzeText(text: string, uri: string): RunResult {
     const mpd = parseMpd(text, uri);
     const rend = analyzeMpd(mpd, labelFromUri(uri));
     return {
+      raw: { text, uri },
       ...summarize(uri, false, [rend], []),
       meta: {
         protocol: "dash",
@@ -163,6 +172,7 @@ export async function analyzeUrl(
   if (isMpd(root.text)) {
     const r = analyzeText(root.text, root.finalUrl);
     r.meta.fetchMs = root.ms;
+    r.raw = { text: root.text, uri: root.finalUrl };
     return r;
   }
 

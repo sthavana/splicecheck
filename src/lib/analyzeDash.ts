@@ -240,7 +240,9 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
       );
     }
 
-    if (p.mediaDuration === 0) {
+    // Only claim a period is empty when there was a timeline to be empty.
+    const numberAddressed = p.adaptationSets.some((a) => !a.usesTimeline && a.segmentDuration !== undefined);
+    if (p.mediaDuration === 0 && !numberAddressed) {
       add(
         "warning",
         "EMPTY_PERIOD",
@@ -291,6 +293,25 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
       "NO_PERIOD_CONTINUITY_SIGNAL",
       `${continuityOpportunities} period boundaries could declare continuity but do not`,
       `Adjacent Periods present identical Representation ids, codecs and resolutions, so the stream really is continuous across these boundaries — but nothing says so. Adding SupplementalProperty schemeIdUri="urn:mpeg:dash:period-continuity:2015" lets players carry their buffer and decoder across the boundary instead of re-initialising. Without it, many players re-initialise at every ad transition, which is a visible glitch the encoder is not actually causing.`,
+    );
+  }
+
+  // A stream that declares SCTE-35 inband is telling you the manifest is not
+  // the whole story.
+  const inbandSchemes = [
+    ...new Set(
+      periods.flatMap((p) => p.adaptationSets.flatMap((a) => a.inbandEventSchemes)).filter((x) => /scte35/i.test(x)),
+    ),
+  ];
+  if (inbandSchemes.length) {
+    const hasManifestBreaks = periods.some((p) => p.events.length > 0);
+    add(
+      "info",
+      "INBAND_EVENT_STREAM_DECLARED",
+      `SCTE-35 is declared inband (${inbandSchemes.join(", ")})`,
+      hasManifestBreaks
+        ? "The manifest carries avails and also declares that the segments carry them, so the two should agree. Reading the segments is the only way to know whether they do."
+        : "The manifest declares that SCTE-35 arrives inside the segments and carries no avails of its own, so a manifest-only view of this stream will always report no ad signalling. The cues are there — they are in the media.",
     );
   }
 
@@ -570,7 +591,12 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
   // reference frames get subtracted from each other.
   const mediaEnds = periods.map((p) => p.mediaStart + p.mediaDuration);
   const mediaStarts = periods.map((p) => p.mediaStart);
-  const windowDuration = periods.length ? Math.max(...mediaEnds) - Math.min(...mediaStarts) : 0;
+  let windowDuration = periods.length ? Math.max(...mediaEnds) - Math.min(...mediaStarts) : 0;
+  // A number-addressed live stream has no timeline to measure, so the window
+  // it actually offers is the time-shift buffer.
+  if (windowDuration <= 0 && live && mpd.timeShiftBufferDepth) {
+    windowDuration = mpd.timeShiftBufferDepth;
+  }
   const adSeconds = adDurations.reduce((a, b) => a + b, 0);
 
   const adPeriodIndexes = new Set(summaries.filter((x) => x.isAd).map((x) => x.index));

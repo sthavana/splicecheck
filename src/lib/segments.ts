@@ -9,7 +9,8 @@
  * that can.
  */
 
-import type { Finding, RenditionAnalysis, Severity } from "./analyze";
+import type { AdBreak, Finding, RenditionAnalysis, Severity } from "./analyze";
+import { fillTemplate, parseMpd, type DashAdaptationSet, type DashPeriod, type MpdDocument } from "./dash";
 import type { HlsSegment } from "./hls";
 import { resolveUri } from "./hls";
 import { findEmsgBoxes, readBaseMediaDecodeTime } from "./mp4";
@@ -49,6 +50,8 @@ export interface SegmentProbe {
   attempted: number;
   fetched: number;
   bytes: number;
+  /** how many segments the window holds, so a null result can be qualified */
+  available?: number;
   format: "mpeg-ts" | "cmaf" | "mixed" | "unknown";
   signals: InbandSignal[];
   findings: Finding[];
@@ -247,6 +250,7 @@ export async function probeRendition(
   };
 
   const chosen = chooseSegments(rendition, opts.maxSegments);
+  probe.available = rendition.playlist?.segments.length;
   probe.attempted = chosen.length;
   const formats = new Set<string>();
 
@@ -308,9 +312,15 @@ export function compareWithManifest(rendition: RenditionAnalysis, probe: Segment
       "info",
       "NO_INBAND_SCTE35",
       "No SCTE-35 in the segments that were read",
-      manifestHasBreaks
-        ? `${probe.fetched} segment(s) were read and none carried a cue, so for this stream the manifest is the only carriage. That is normal where the packager generates the signalling, but it also means there is nothing to check the manifest against — a tag that is wrong is wrong unopposed.`
-        : `${probe.fetched} segment(s) were read and none carried a cue, consistent with a stream that signals no avails.`,
+      (() => {
+        const coverage =
+          probe.available && probe.available > probe.fetched
+            ? ` That is ${probe.fetched} of the ${probe.available} segments in the window, so a cue carried in one of the rest would not have been seen.`
+            : "";
+        return manifestHasBreaks
+          ? `${probe.fetched} segment(s) were read and none carried a cue, so for this stream the manifest is the only carriage. That is normal where the packager generates the signalling, but it also means there is nothing to check the manifest against — a tag that is wrong is wrong unopposed.${coverage}`
+          : `${probe.fetched} segment(s) were read and none carried a cue, consistent with a stream that signals no avails.${coverage}`;
+      })(),
     );
     return findings;
   }
@@ -358,7 +368,10 @@ export function compareWithManifest(rendition: RenditionAnalysis, probe: Segment
     }
   }
 
-  // A cue in the stream that the manifest never mentions.
+  // A cue in the stream that the manifest never mentions. This only means the
+  // packager dropped something if the manifest is transcribing cues at all —
+  // a stream that signals inband only was never claiming to carry them.
+  const manifestTranscribes = allManifestBreaks.length > 0;
   for (const s of inbandOpens) {
     if (s.pdt === undefined) continue;
     const covered = allManifestBreaks.some(
@@ -367,13 +380,219 @@ export function compareWithManifest(rendition: RenditionAnalysis, probe: Segment
     const idMatch = allManifestBreaks.some((b) => b.eventId !== undefined && b.eventId === s.eventId);
     if (!covered && !idMatch) {
       add(
-        "error",
-        "INBAND_SIGNAL_NOT_IN_MANIFEST",
-        `A cue in the stream at ${new Date(s.pdt).toISOString()} has no tag in the manifest`,
-        `The encoder signalled an avail${s.eventId !== undefined ? ` (event ${s.eventId})` : ""} that the packager did not transcribe. Players and SSAI read the manifest, so this break does not exist as far as anything downstream is concerned — the inventory is simply lost.`,
+        manifestTranscribes ? "error" : "info",
+        manifestTranscribes ? "INBAND_SIGNAL_NOT_IN_MANIFEST" : "INBAND_ONLY_SIGNALLING",
+        manifestTranscribes
+          ? `A cue in the stream at ${new Date(s.pdt).toISOString()} has no tag in the manifest`
+          : `Avail at ${new Date(s.pdt).toISOString()} exists only in the segments`,
+        manifestTranscribes
+          ? `The encoder signalled an avail${s.eventId !== undefined ? ` (event ${s.eventId})` : ""} that the packager did not transcribe, while transcribing others. Players and SSAI read the manifest, so this break does not exist as far as anything downstream is concerned — the inventory is simply lost.`
+          : `The manifest carries no avails at all, so this stream signals inband only and nothing has been dropped. Anything downstream that reads the manifest will still see no ad breaks, which is worth knowing before a player or an SSAI service is pointed at it.`,
       );
     }
   }
 
   return findings;
+}
+
+
+// ---------------------------------------------------------------- DASH ----
+
+interface DashSegmentRef {
+  url: string;
+  /** presentation time of the segment on the MPD timeline, seconds */
+  start: number;
+  /** wall clock of the segment's start, where availabilityStartTime allows it */
+  pdt?: number;
+  period: DashPeriod;
+}
+
+/** Resolves a SegmentTemplate into fetchable segment URLs. */
+export function resolveDashSegments(
+  mpd: MpdDocument,
+  period: DashPeriod,
+  as: DashAdaptationSet,
+): { init?: string; segments: DashSegmentRef[] } {
+  const rep = as.representations[0];
+  if (!rep || !as.mediaTemplate) return { segments: [] };
+
+  const base = as.baseUrl ? resolveUri(mpd.uri, as.baseUrl) : mpd.uri;
+  const vars = { RepresentationID: rep.id, Bandwidth: rep.bandwidth };
+
+  const init = as.initTemplate
+    ? resolveUri(base, fillTemplate(as.initTemplate, vars))
+    : undefined;
+
+  // Streams addressed by @duration have no timeline to walk, so the numbers
+  // have to be derived: segment N covers presentation time N × duration, with
+  // @startNumber aligned to @presentationTimeOffset. On a live stream only the
+  // part of that range still inside the time-shift buffer actually exists.
+  if (as.segments.length === 0 && as.segmentDuration !== undefined) {
+    const segDur = as.segmentDuration / as.timescale;
+    if (segDur <= 0) return { init, segments: [] };
+
+    // @startNumber addresses the first segment of the period, and
+    // @presentationTimeOffset is the media time that period start corresponds
+    // to. Presentation time and media time are different frames: mixing them
+    // puts every segment number out by the offset.
+    const ptoSeconds = as.presentationTimeOffset / as.timescale;
+    const numberAt = (presentationTime: number) =>
+      as.startNumber + Math.floor((presentationTime - period.start) / segDur);
+
+    let from: number;
+    let to: number;
+    if (mpd.type === "dynamic" && mpd.availabilityStartTime !== undefined) {
+      const nowSeconds = (Date.now() - mpd.availabilityStartTime) / 1000;
+      const edge = nowSeconds - (mpd.suggestedPresentationDelay ?? segDur * 2);
+      const oldest = edge - (mpd.timeShiftBufferDepth ?? 60);
+      from = Math.max(period.start, oldest);
+      to = Math.min(edge, period.start + (period.mediaDuration || Infinity));
+    } else {
+      from = period.start;
+      to = period.start + (period.mediaDuration || segDur * 20);
+    }
+    if (!(to > from)) return { init, segments: [] };
+
+    const out: DashSegmentRef[] = [];
+    const lastN = numberAt(to);
+    for (let n = numberAt(from); n <= lastN && out.length < 2000; n++) {
+      const offset = (n - as.startNumber) * segDur;
+      const start = period.start + offset;
+      out.push({
+        url: resolveUri(
+          base,
+          fillTemplate(as.mediaTemplate!, {
+            ...vars,
+            Number: n,
+            // $Time$ is media time, which is where the offset applies.
+            Time: Math.round((ptoSeconds + offset) * as.timescale),
+          }),
+        ),
+        start,
+        pdt: mpd.availabilityStartTime !== undefined ? mpd.availabilityStartTime + start * 1000 : undefined,
+        period,
+      });
+    }
+    return { init, segments: out };
+  }
+
+  const segments = as.segments.map((e) => {
+    const url = resolveUri(base, fillTemplate(as.mediaTemplate!, { ...vars, Number: e.number, Time: e.t }));
+    const start = e.t / as.timescale;
+    return {
+      url,
+      start,
+      pdt: mpd.availabilityStartTime !== undefined ? mpd.availabilityStartTime + start * 1000 : undefined,
+      period,
+    };
+  });
+
+  return { init, segments };
+}
+
+/** Picks the segments worth opening: those an avail begins in, then a spread. */
+function chooseDashSegments(refs: DashSegmentRef[], breaks: AdBreak[], limit: number): DashSegmentRef[] {
+  if (refs.length === 0) return [];
+  const picked = new Map<number, DashSegmentRef>();
+
+  for (const b of breaks) {
+    const at = refs.findIndex((r) => r.start + 0.001 >= b.startTime);
+    if (at >= 0) {
+      if (at > 0) picked.set(at - 1, refs[at - 1]);
+      picked.set(at, refs[at]);
+    }
+    if (picked.size >= limit) break;
+  }
+  if (picked.size < limit) {
+    const stride = Math.max(1, Math.floor(refs.length / Math.max(1, limit - picked.size)));
+    for (let i = 0; i < refs.length && picked.size < limit; i += stride) picked.set(i, refs[i]);
+  }
+  return [...picked.entries()].sort((a, b) => a[0] - b[0]).slice(0, limit).map(([, r]) => r);
+}
+
+/**
+ * Reads the segments of a DASH stream. Unlike HLS, where the playlist lists
+ * every segment outright, the URLs have to be built from a SegmentTemplate
+ * before anything can be fetched.
+ */
+export async function probeMpd(
+  manifestText: string,
+  manifestUri: string,
+  rendition: RenditionAnalysis,
+  options: ProbeOptions = {},
+): Promise<SegmentProbe> {
+  const opts = { ...DEFAULTS, ...options };
+  const probe: SegmentProbe = {
+    attempted: 0,
+    fetched: 0,
+    bytes: 0,
+    format: "unknown",
+    signals: [],
+    findings: [],
+    fetchErrors: [],
+  };
+
+  const mpd = parseMpd(manifestText, manifestUri);
+
+  // Collect candidate segments across every period, from the video set.
+  const refs: DashSegmentRef[] = [];
+  let init: string | undefined;
+  for (const period of mpd.periods) {
+    const video =
+      period.adaptationSets.find((a) => a.mimeType?.startsWith("video")) ?? period.adaptationSets[0];
+    if (!video) continue;
+    const resolved = resolveDashSegments(mpd, period, video);
+    init ??= resolved.init;
+    refs.push(...resolved.segments);
+  }
+
+  if (refs.length === 0) {
+    probe.findings.push({
+      severity: "info",
+      code: "SEGMENTS_NOT_ADDRESSABLE",
+      title: "Segment URLs could not be built from this manifest",
+      detail:
+        "The adaptation sets do not carry a SegmentTemplate with a media pattern and a timeline, so there is no way to address individual segments without guessing. Reading them is skipped rather than attempted blindly.",
+      rendition: rendition.label,
+    });
+    return probe;
+  }
+
+  // A cue can sit in one segment out of thirty. Where the manifest carries no
+  // avails of its own there is nothing to aim at, so sampling a spread would
+  // most likely miss it — scan the window instead, within a budget.
+  const manifestHasBreaks = rendition.breaks.length > 0;
+  const budget = manifestHasBreaks ? opts.maxSegments : Math.max(opts.maxSegments, Math.min(refs.length, 60));
+  const chosen = manifestHasBreaks
+    ? chooseDashSegments(refs, rendition.breaks, budget)
+    : refs.slice(-budget);
+  probe.available = refs.length;
+  probe.attempted = chosen.length;
+  const formats = new Set<string>();
+
+  // The init segment carries no events, but some packagers put the first emsg
+  // there, and it costs one small request.
+  const targets = init ? [{ url: init, pdt: undefined as number | undefined }, ...chosen] : chosen;
+  probe.attempted = targets.length;
+
+  const results = await Promise.allSettled(
+    targets.map(async (t) => ({ t, buf: await fetchSegment(t.url, opts) })),
+  );
+
+  for (const r of results) {
+    if (r.status === "rejected") {
+      probe.fetchErrors.push(r.reason instanceof Error ? r.reason.message : String(r.reason));
+      continue;
+    }
+    const { t, buf } = r.value;
+    probe.fetched++;
+    probe.bytes += buf.length;
+    formats.add(looksLikeTransportStream(buf) ? "mpeg-ts" : "cmaf");
+    probe.signals.push(...readSegment(buf, t.url, t.pdt));
+  }
+
+  probe.format =
+    formats.size === 0 ? "unknown" : formats.size > 1 ? "mixed" : ([...formats][0] as "mpeg-ts" | "cmaf");
+  probe.findings.push(...compareWithManifest(rendition, probe));
+  return probe;
 }
