@@ -34,6 +34,16 @@ jobs:
 
       # The CLI is the tool's own contract: it must find the planted defects
       # and exit non-zero, and stay silent on a well-formed manifest.
+      # A static page that ships without the shared stylesheet renders its
+      # navigation as an unstyled list. That happened once; this catches it.
+      - name: Static pages link the shared stylesheet
+        run: |
+          for f in public/guide.html public/streaming.html public/notes/*.html; do
+            grep -q 'reading.css' "$f" || { echo "$f does not link /reading.css"; exit 1; }
+            grep -q 'site-nav-brand' "$f" || { echo "$f has no site navigation"; exit 1; }
+          done
+          echo "all static pages link the stylesheet and carry navigation"
+
       - name: CLI finds planted defects and fails
         run: |
           if ./dist/cli.mjs fixtures/broken.m3u8 --quiet; then
