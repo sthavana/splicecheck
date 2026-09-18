@@ -9,7 +9,10 @@ const nextConfig: NextConfig = {
   // The reference guide is a standalone static page; serve it without its
   // extension so the URL reads like the rest of the site.
   async rewrites() {
-    return [{ source: "/guide", destination: "/guide.html" }];
+    return [
+      { source: "/guide", destination: "/guide.html" },
+      { source: "/notes/fifty-five-alerts", destination: "/notes/fifty-five-alerts.html" },
+    ];
   },
 };
 

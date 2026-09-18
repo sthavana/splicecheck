@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fifty-five alerts and nothing wrong</title>
+<meta name="description" content="I pointed a stream monitor at two healthy live streams and it raised 55 alerts in ninety minutes. None of them described a real fault. Seven reasons a healthy stream is allowed to look broken.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* Same token set as /guide, so the two reading pages are siblings. */
+:root {
+  color-scheme: light;
+  --ground:      #f6f7f9;
+  --surface:     #ffffff;
+  --surface-alt: #eef1f5;
+  --ink:         #10151b;
+  --ink-soft:    #4d5766;
+  --ink-faint:   #7b8698;
+  --rule:        #dde2e9;
+  --rule-strong: #c3cbd6;
+  --accent:      #b44309;
+  --accent-soft: #fbeee4;
+  --alert:       #a51b1b;
+  --ok:          #0d7346;
+
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 63ch;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground:      #0d1117;
+    --surface:     #141a22;
+    --surface-alt: #1a212b;
+    --ink:         #e4ebf2;
+    --ink-soft:    #a3b0c0;
+    --ink-faint:   #7b8898;
+    --rule:        #232c38;
+    --rule-strong: #35414f;
+    --accent:      #f0a04b;
+    --accent-soft: #2a1f14;
+    --alert:       #ef7b7b;
+    --ok:          #5fd3a3;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground:      #0d1117;
+  --surface:     #141a22;
+  --surface-alt: #1a212b;
+  --ink:         #e4ebf2;
+  --ink-soft:    #a3b0c0;
+  --ink-faint:   #7b8898;
+  --rule:        #232c38;
+  --rule-strong: #35414f;
+  --accent:      #f0a04b;
+  --accent-soft: #2a1f14;
+  --alert:       #ef7b7b;
+  --ok:          #5fd3a3;
+}
+
+* { box-sizing: border-box; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 18px;
+  line-height: 1.68;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bars { display: grid; grid-template-columns: repeat(7, 1fr); height: 5px; }
+.bars i { display: block; }
+.bars i:nth-child(1) { background: #c0c0c0; }
+.bars i:nth-child(2) { background: #c0c000; }
+.bars i:nth-child(3) { background: #00c0c0; }
+.bars i:nth-child(4) { background: #00c000; }
+.bars i:nth-child(5) { background: #c000c0; }
+.bars i:nth-child(6) { background: #c00000; }
+.bars i:nth-child(7) { background: #0000c0; }
+
+.toolbar { border-bottom: 1px solid var(--rule); background: var(--surface); }
+.toolbar div {
+  max-width: 1180px; margin: 0 auto; padding: 11px 20px;
+  display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline;
+  font-family: var(--display); font-size: 13.5px;
+}
+.toolbar a { color: var(--ink-soft); text-decoration: none; }
+.toolbar a:hover { color: var(--accent); }
+.toolbar .brand { font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
+.toolbar .brand span { color: var(--accent); }
+.toolbar .spacer { margin-left: auto; }
+
+.shell {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-inline: 20px;
+  padding-block: 0 96px;
+}
+
+header.masthead {
+  padding-block: 64px 36px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 40px;
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 18px;
+}
+h1 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(34px, 6vw, 54px);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  margin: 0 0 22px;
+  text-wrap: balance;
+}
+.byline {
+  font-family: var(--display);
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+h2 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(23px, 3vw, 29px);
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+  margin: 52px 0 14px;
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.005em;
+  margin: 38px 0 8px;
+}
+p { margin: 0 0 18px; max-width: var(--measure); }
+ul { max-width: var(--measure); padding-left: 22px; margin: 0 0 18px; }
+li { margin-bottom: 9px; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.82em;
+  background: var(--surface-alt);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1px 5px;
+  word-break: break-word;
+}
+
+.lede {
+  font-size: 20px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 58ch;
+}
+
+.tablewrap { overflow-x: auto; margin: 26px 0; }
+table {
+  border-collapse: collapse;
+  font-family: var(--display);
+  font-size: 14.5px;
+  min-width: 340px;
+}
+th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+  padding: 0 22px 9px 0;
+  border-bottom: 1px solid var(--rule-strong);
+}
+td {
+  padding: 9px 22px 9px 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+td:first-child { color: var(--ink); font-weight: 500; }
+td code { font-size: 12.5px; }
+tbody tr:last-child td { border-bottom: none; }
+
+.result td:first-child { color: var(--ink-soft); font-weight: 400; }
+.result td:last-child { color: var(--ink); font-weight: 600; font-family: var(--display); }
+
+.pull {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 18px 22px;
+  margin: 30px 0;
+  border-radius: 0 4px 4px 0;
+  max-width: var(--measure);
+}
+.pull p:last-child { margin-bottom: 0; }
+
+.takeaways { margin: 26px 0; max-width: var(--measure); }
+.takeaways p {
+  border-top: 1px solid var(--rule);
+  padding-top: 14px;
+  margin-bottom: 18px;
+}
+.takeaways strong { font-family: var(--display); font-size: 16px; display: block; margin-bottom: 4px; }
+
+footer.colophon {
+  border-top: 1px solid var(--rule);
+  margin-top: 56px;
+  padding-top: 26px;
+  font-size: 15px;
+  color: var(--ink-faint);
+  max-width: var(--measure);
+}
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+<div class="toolbar">
+  <div>
+    <a class="brand" href="/">Splice<span>Check</span></a>
+    <a href="/">Inspector</a>
+    <a href="/compare">Pipeline comparison</a>
+    <a href="/monitors">Monitors</a>
+    <a href="/guide">Ad insertion guide</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/sthavana/splicecheck">Source</a>
+  </div>
+</div>
+
+<div class="shell">
+
+<header class="masthead">
+  <p class="eyebrow">Notes · monitoring</p>
+  <h1>Fifty-five alerts and nothing wrong</h1>
+  <p class="byline">
+    <span>Siva Thavanathan</span>
+    <span>18 September 2026</span>
+  </p>
+</header>
+
+<main>
+
+<p class="lede">I built a monitor for the ad signalling in live video streams. It polls a stream,
+works out where the ad breaks are, and raises an alert when something changes for the worse.</p>
+
+<p>I pointed it at two live streams that were working perfectly well. Ninety minutes later it had
+raised <strong>55 alerts</strong>. Not one described a real fault.</p>
+
+<p>I could have filtered them, or raised the thresholds until the noise stopped. Instead I went
+through all 55 and asked, each time: <em>why is the stream allowed to look like this?</em></p>
+
+<p>There turned out to be seven distinct answers. They are all specific to video, but the shape of
+the problem is not.</p>
+
+<h2>What the monitor watches</h2>
+
+<p>Enough background to follow the rest.</p>
+
+<p>A live stream is delivered as a <strong>manifest</strong> — a text file listing the last few
+minutes of video in short segments. The player refetches it every few seconds. Old segments fall off
+the front as new ones are added, so the manifest describes a <strong>sliding window</strong> over the
+stream, typically a few minutes wide.</p>
+
+<p>Ad breaks are announced in that manifest with markers called <strong>SCTE-35</strong>. A break, or
+<em>avail</em>, is bracketed by a cue out and a cue in. Downstream, an ad insertion service reads
+those markers and substitutes commercials into the break.</p>
+
+<p>A stream is also delivered at several <strong>renditions</strong> — the same content at 720p,
+480p, audio-only — and every one of them must carry identical ad signalling. If they disagree,
+whether the ad plays depends on which rendition the player happened to pick.</p>
+
+<p>The one design decision that matters for this story: <strong>alerts fire on transitions, not on
+state</strong>. A fault alerts when it appears, stays quiet while it persists, and alerts once when
+it clears. A monitor that pages you every minute about something that has been true since Tuesday is
+a monitor people mute.</p>
+
+<h2>The first long run</h2>
+
+<p>I left it polling two streams every twenty seconds: one HLS with four renditions, one
+multi-period DASH. Both were public demo services, both healthy throughout.</p>
+
+<p>After ninety minutes:</p>
+
+<div class="tablewrap">
+  <table>
+    <thead><tr><th>Count</th><th>Alert</th></tr></thead>
+    <tbody>
+      <tr><td>10</td><td><code>ERRORS_CLEARED</code></td></tr>
+      <tr><td>10</td><td><code>VERDICT_DEGRADED</code></td></tr>
+      <tr><td>9</td><td><code>NEW_VARIANT_MISSING_BREAK</code></td></tr>
+      <tr><td>8</td><td><code>NEW_ORPHAN_CUE_IN</code></td></tr>
+      <tr><td>8</td><td><code>NEW_NESTED_CUE_OUT</code></td></tr>
+      <tr><td>6</td><td><code>NEW_VARIANT_BREAK_COUNT_MISMATCH</code></td></tr>
+      <tr><td>2</td><td><code>NEW_AV_DURATION_SKEW</code></td></tr>
+      <tr><td>2</td><td><code>STREAM_RECOVERED</code></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>The first two lines are the tell. <code>VERDICT_DEGRADED</code> and <code>ERRORS_CLEARED</code>
+traded places ten times each. The monitor was deciding the stream had broken, then that it had
+recovered, roughly every ten minutes, for an hour and a half.</p>
+
+<p>Nothing about the streams changed in that time. Ads played. Players were happy.</p>
+
+<div class="pull">
+  <p>The tempting reading is that live streams are noisy and a monitor needs a tolerance band. That
+  reading is wrong, and it is worth being precise about why. Every one of these alerts was the
+  monitor asserting something false about the stream. Widening a threshold does not make a false
+  assertion true — it just makes the tool assert it less often, while blinding it to the real fault
+  that looks identical.</p>
+</div>
+
+<h2>Seven reasons a healthy stream looks broken</h2>
+
+<h3>1. One fault, counted four times</h3>
+
+<p>A stream with four renditions raises the same finding four times, once per rendition. My alerting
+turned each into its own alert.</p>
+
+<p>Not subtle, and not interesting — but it inflated the count enough to obscure everything else.
+One fault is one alert; the rendition count belongs in the detail line.</p>
+
+<h3>2. The window opens part-way through a break</h3>
+
+<p>The manifest is a sliding window. Sometimes it begins in the middle of an ad break, so the first
+marker in it is a cue <em>in</em> — a return from a break whose departure has already aged off the
+front.</p>
+
+<p>My parser saw a return with nothing to return from and called it an orphan: signal lost between
+encoder and packager. It is nothing of the sort. It is the window sliding, and it happens to every
+live stream a few times an hour.</p>
+
+<p>The fix is not to stop reporting orphans. A cue in with no cue out, <em>after</em> a break that
+paired correctly, is a real fault — that one is not the window boundary. So: the leading one is
+expected, any later one is not.</p>
+
+<h3>3. The next break then looks nested</h3>
+
+<p>Straight after that. If the window opened inside a break, that break never closes within the
+window. The next cue out then arrives while one is still open, which reads as a nested break —
+invalid, and a genuine cause of wedged ad-insertion state machines.</p>
+
+<p>Except it is the same artifact wearing a different hat. The previous break was clipped by the
+window, so of course nothing closed it.</p>
+
+<p>Taken together, 2 and 3 are what made the stream flap between pass and fail every ten minutes: the
+window crossing a break boundary, twice per cycle.</p>
+
+<h3>4. A tag left behind by the window</h3>
+
+<p>This one I enjoyed. A <code>DATERANGE</code> tag — which declares its own start time — stays in
+the manifest until its whole range has rolled out. So the oldest one ends up sitting in front of a
+<em>later</em> segment than the one it originally preceded.</p>
+
+<p>I had just added a rule comparing a tag's declared time against the position it occupies. It fired
+within minutes on a healthy stream, reporting a 1.92s disagreement.</p>
+
+<p>The tell was that the number grew. Next poll it was 24.96s. A real inconsistency is a constant; a
+drift that widens on every refresh is the window moving underneath something that is standing
+still.</p>
+
+<h3>5. Renditions roll independently</h3>
+
+<p>Cross-rendition comparison is the check I care most about, because renditions disagreeing is what
+produces <em>“the ad played on Roku but not on iOS”</em>.</p>
+
+<p>But the renditions are separate files, fetched at slightly different moments, each with its own
+window. Near the start of the shared window, one may have already trimmed a break's cue out while
+another still carries it. The break then exists in one and not the other, for no reason anyone did
+anything wrong.</p>
+
+<p>So the comparison holds back from the boundary by a couple of segment durations. A genuinely
+missing break is still caught on the next poll, once it has moved away from the edge.</p>
+
+<h3>6. The same thing at the other end</h3>
+
+<p>I fixed 5, shipped it, and it came back — at the opposite boundary.</p>
+
+<p>Audio segments are shorter than video segments, so an audio rendition reaches the return from a
+break <em>sooner</em> than the video ones. At the live edge the newest break is therefore closed in
+audio and still open in video. Only closed breaks are comparable, so the counts differed: audio 5,
+video 4.</p>
+
+<p>The same class of artifact, at the end of the window instead of the start. I should have seen it
+when I wrote the first fix, and did not.</p>
+
+<h3>7. The newest period is still being written</h3>
+
+<p>On the DASH stream, a check comparing audio and video durations within a period reported a
+2-second mismatch.</p>
+
+<p>Audio and video are published independently. The newest period on a live manifest is still
+filling, so its tracks legitimately differ by a segment or more until it closes. Measured on a
+completed period the same figure is tens of milliseconds.</p>
+
+<p>The check is worth having — accumulated A/V skew is real lip-sync drift. It just cannot be
+measured on a period that has not finished.</p>
+
+<h2>Suppress at the boundary, keep the rule everywhere else</h2>
+
+<p>Every one of the seven has the same shape. The rule was right. The stream was right. They
+disagreed only where the observation window cuts across something continuous.</p>
+
+<p>So none of the fixes weakened a rule. Each one identified the edge and excluded it:</p>
+
+<ul>
+  <li>A cue in with no cue out is <strong>expected</strong> at the top of the window, and an
+  <strong>error</strong> anywhere after a break that paired correctly.</li>
+  <li>A break near either end of the shared window is skipped for cross-rendition comparison. One in
+  the middle is not.</li>
+  <li>A tag whose declared time drifts <em>earlier</em> as the window slides is the window moving.
+  One declaring a time <em>later</em> than it sits is a real inconsistency, and still reports.</li>
+  <li>A/V skew is not measured on the period still being written. It is measured on every completed
+  one.</li>
+</ul>
+
+<p>The distinction that matters: a threshold makes the tool blunter everywhere. Excluding the
+boundary makes it quieter in exactly the place the observation is meaningless, and no quieter
+anywhere else.</p>
+
+<p>That is harder than it sounds, because it requires knowing <em>why</em> the stream looks that way.
+You cannot do it from the spec. You have to watch the thing run and be willing to treat your own tool
+as the suspect.</p>
+
+<h2>The one that nearly went the other way</h2>
+
+<p>A false positive that announces itself as absurd is easy. The dangerous one is plausible.</p>
+
+<p>Later I added a check that reads the ad markers carried inside the media segments themselves and
+compares them with what the manifest claims. The manifest is only a transcription: an encoder emits
+the cue into the stream, a packager writes a tag describing it, and the two can disagree.</p>
+
+<p>The first run against a live service gave this:</p>
+
+<div class="tablewrap">
+  <table>
+    <thead><tr><th>Break</th><th>Manifest</th><th>From the segments</th><th>Drift</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>13:39:56.160</td><td>13:39:56.285</td><td>0.125s</td></tr>
+      <tr><td>2</td><td>13:41:57.120</td><td>13:41:57.245</td><td>0.125s</td></tr>
+      <tr><td>3</td><td>13:43:58.080</td><td>13:43:58.205</td><td>0.125s</td></tr>
+      <tr><td>4</td><td>13:45:59.040</td><td>13:45:59.165</td><td>0.125s</td></tr>
+      <tr><td>5</td><td>13:48:00.000</td><td>13:48:00.125</td><td>0.125s</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>125 milliseconds, consistently. That is an entirely credible packager defect. It is about four
+frames. I could have written it up.</p>
+
+<p>The giveaway is the consistency. A real transcription error drifts, or varies with content. A
+constant offset across five independent breaks is a systematic error in the <em>measurement</em>.</p>
+
+<p>And it was. To place a cue on the wall clock you need an anchor in the segment. I had used the
+PCR, the stream's clock reference. But the timestamp a manifest's dates refer to is the first
+<em>presentation</em> timestamp, and the PCR leads it by the decoder buffer delay.</p>
+
+<p>Anchored correctly, all five breaks come out at <strong>0.000s</strong>. The manifest and the
+stream agree exactly.</p>
+
+<div class="pull">
+  <p>A tool that reports a 125ms fault that does not exist is worse than no tool, because someone
+  will go looking for it.</p>
+</div>
+
+<h2>After</h2>
+
+<p>I cleared the history and left it running again on the same two streams.</p>
+
+<div class="tablewrap">
+  <table class="result">
+    <tbody>
+      <tr><td>Polls</td><td>222 across 66 minutes</td></tr>
+      <tr><td>Failed fetches</td><td>0</td></tr>
+      <tr><td>Polls reporting errors</td><td>0</td></tr>
+      <tr><td>Alerts</td><td>0</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Not one alert, while both windows slid continuously, breaks rolled in and out, and one stream's
+period count moved between 13 and 25.</p>
+
+<p>The rules are all still there. Every one of the seven conditions still reports when it occurs away
+from a boundary, and there are tests for both halves of each: the case that must fire, and the case
+that must stay silent.</p>
+
+<h3>What I would take from it</h3>
+
+<div class="takeaways">
+  <p><strong>Alert fatigue does not show up in a unit test.</strong> My test suite passed throughout.
+  Every one of these needed an hour of real traffic to appear, because each depends on where a moving
+  window happens to fall.</p>
+
+  <p><strong>A monitor that cries wolf is worse than no monitor.</strong> Not equivalent — worse. It
+  trains its reader to dismiss it, and the dismissal habit does not distinguish between the false
+  alerts and the real one.</p>
+
+  <p><strong>Suspect your own tool first.</strong> Every one of these alerts was, on its face, a
+  plausible fault in someone else's system. The instinct to believe your own output is the thing to
+  fight.</p>
+
+  <p><strong>A number that is suspiciously consistent is measuring you.</strong> Real faults vary. A
+  constant is almost always your instrument.</p>
+</div>
+
+<footer class="colophon">
+  <p>The code is at <a href="https://github.com/sthavana/splicecheck">github.com/sthavana/splicecheck</a>,
+  with the seven fixes and their tests. The commit messages say what each one got wrong, which is the
+  part I would want to read. The tool itself is <a href="/">here</a>, and
+  <a href="/guide">how ad insertion works</a> covers the domain this sits in.</p>
+</footer>
+
+</main>
+</div>
+</body>
+</html>

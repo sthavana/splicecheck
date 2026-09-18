@@ -8,7 +8,8 @@ conditions that make server-side ad insertion mis-fire. Then it watches the
 stream and tells you when that changes.
 
 **Live demo: [splicecheck.vercel.app](https://splicecheck.vercel.app)** ·
-**Reference: [how ad insertion works](https://splicecheck.vercel.app/guide)**
+**Reference: [how ad insertion works](https://splicecheck.vercel.app/guide)** ·
+**Write-up: [fifty-five alerts and nothing wrong](https://splicecheck.vercel.app/notes/fifty-five-alerts)**
 
 The interface follows the viewer's colour theme, and can be set to light or dark
 explicitly.
