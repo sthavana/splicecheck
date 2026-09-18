@@ -130,9 +130,10 @@ export default function Compare() {
             streams side by side and settles it.
           </p>
         </div>
-        <Link href="/" className="shrink-0 text-sm text-accent hover:underline">
-          ← inspector
-        </Link>
+        <div className="flex shrink-0 flex-col gap-1 text-sm">
+          <Link href="/" className="text-accent hover:underline">← inspector</Link>
+          <a href="/guide" className="text-accent hover:underline">how ad insertion works →</a>
+        </div>
       </header>
 
       <section className="rounded-xl border border-edge bg-panel p-4">

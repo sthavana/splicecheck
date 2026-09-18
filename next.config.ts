@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/analyze": ["./fixtures/samples/**/*"],
   },
+  // The reference guide is a standalone static page; serve it without its
+  // extension so the URL reads like the rest of the site.
+  async rewrites() {
+    return [{ source: "/guide", destination: "/guide.html" }];
+  },
 };
 
 export default nextConfig;

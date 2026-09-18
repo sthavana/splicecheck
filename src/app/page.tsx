@@ -519,6 +519,9 @@ export default function Home() {
           <Link href="/monitors" className="text-accent hover:underline">
             continuous monitors →
           </Link>
+          <a href="/guide" className="text-accent hover:underline">
+            how ad insertion works →
+          </a>
         </div>
       </header>
 

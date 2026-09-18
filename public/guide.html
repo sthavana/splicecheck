@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="How advertising gets into a video stream: SCTE-35 signalling, carriage, client-side and server-side insertion, decisioning, measurement, and the failure modes that leave playback looking healthy.">
+<title>The Ad Insertion Chain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+:root {
+  --ground:      #f6f7f9;
+  --surface:     #ffffff;
+  --surface-alt: #eef1f5;
+  --ink:         #10151b;
+  --ink-soft:    #4d5766;
+  --ink-faint:   #7b8698;
+  --rule:        #dde2e9;
+  --rule-strong: #c3cbd6;
+  --accent:      #b44309;
+  --accent-soft: #fbeee4;
+  --server:      #0f6b63;
+  --server-soft: #e2f2f0;
+  --client:      #1c4ed8;
+  --client-soft: #e6ecfd;
+  --alert:       #a51b1b;
+  --alert-soft:  #fbe9e9;
+
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --measure: 66ch;
+  --rail: 232px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:      #0d1117;
+    --surface:     #141a22;
+    --surface-alt: #1a212b;
+    --ink:         #e4ebf2;
+    --ink-soft:    #a3b0c0;
+    --ink-faint:   #7b8898;
+    --rule:        #232c38;
+    --rule-strong: #35414f;
+    --accent:      #f0a04b;
+    --accent-soft: #2a1f14;
+    --server:      #45c4b8;
+    --server-soft: #11292a;
+    --client:      #7aa5f5;
+    --client-soft: #141f36;
+    --alert:       #ef7b7b;
+    --alert-soft:  #2b1618;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground:      #0d1117;
+  --surface:     #141a22;
+  --surface-alt: #1a212b;
+  --ink:         #e4ebf2;
+  --ink-soft:    #a3b0c0;
+  --ink-faint:   #7b8898;
+  --rule:        #232c38;
+  --rule-strong: #35414f;
+  --accent:      #f0a04b;
+  --accent-soft: #2a1f14;
+  --server:      #45c4b8;
+  --server-soft: #11292a;
+  --client:      #7aa5f5;
+  --client-soft: #141f36;
+  --alert:       #ef7b7b;
+  --alert-soft:  #2b1618;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* SMPTE colour bars — the one ornament, and the only place these hues appear. */
+.bars {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  height: 5px;
+}
+.bars i { display: block; }
+.bars i:nth-child(1) { background: #c0c0c0; }
+.bars i:nth-child(2) { background: #c0c000; }
+.bars i:nth-child(3) { background: #00c0c0; }
+.bars i:nth-child(4) { background: #00c000; }
+.bars i:nth-child(5) { background: #c000c0; }
+.bars i:nth-child(6) { background: #c00000; }
+.bars i:nth-child(7) { background: #0000c0; }
+
+.shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-inline: 20px;
+  padding-block: 0 96px;
+}
+
+/* ---------------------------------------------------------------- header */
+
+header.masthead {
+  padding-block: 56px 40px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 44px;
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 18px;
+}
+h1 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(38px, 6.5vw, 62px);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  margin: 0 0 20px;
+  text-wrap: balance;
+}
+.standfirst {
+  font-size: clamp(18px, 2.2vw, 21px);
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 58ch;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ grid */
+
+.layout {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  gap: 56px;
+  align-items: start;
+}
+
+nav.rail {
+  position: sticky;
+  top: 24px;
+  font-family: var(--display);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+nav.rail h2 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+  margin: 0 0 14px;
+}
+nav.rail ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  counter-reset: rail;
+}
+nav.rail a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 6px;
+  padding-block: 2px;
+  border-left: 2px solid transparent;
+  padding-left: 10px;
+  margin-left: -12px;
+}
+nav.rail a::before {
+  counter-increment: rail;
+  content: counter(rail, decimal-leading-zero);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  padding-top: 2px;
+}
+nav.rail a:hover { color: var(--accent); border-left-color: var(--accent); }
+nav.rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+main { min-width: 0; }
+
+/* -------------------------------------------------------------- sections */
+
+section { margin-bottom: 72px; scroll-margin-top: 24px; }
+
+h2 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(26px, 3.4vw, 34px);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+  text-wrap: balance;
+  max-width: var(--measure);
+}
+.sec-num {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 10px;
+}
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  margin: 36px 0 8px;
+  max-width: var(--measure);
+}
+h4 {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 28px 0 8px;
+}
+p { max-width: var(--measure); margin: 0 0 16px; }
+main ul, main ol { max-width: var(--measure); padding-left: 22px; margin: 0 0 16px; }
+main li { margin-bottom: 7px; }
+strong { font-weight: 600; }
+
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.855em;
+  background: var(--surface-alt);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1px 5px;
+  word-break: break-word;
+}
+
+.lede {
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 60ch;
+  margin-bottom: 26px;
+}
+
+/* ----------------------------------------------------------- side-by-side */
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 28px 0;
+}
+.split > div { padding: 22px 24px; background: var(--surface); }
+.split > div + div { border-left: 1px solid var(--rule); }
+.split h4 { margin-top: 0; }
+.split p:last-child, .split ul:last-child { margin-bottom: 0; }
+.split.client h4 { color: var(--client); }
+.split.server h4 { color: var(--server); }
+
+@media (max-width: 620px) {
+  .split > div + div { border-left: none; border-top: 1px solid var(--rule); }
+}
+
+/* --------------------------------------------------------------- figures */
+
+figure {
+  margin: 34px 0;
+  padding: 0;
+}
+figure svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+figcaption {
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin-top: 12px;
+  max-width: 62ch;
+}
+.figscroll { overflow-x: auto; }
+
+/* ---------------------------------------------------------------- tables */
+
+.tablewrap { overflow-x: auto; margin: 26px 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--display);
+  font-size: 14.5px;
+  min-width: 480px;
+}
+th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+  padding: 0 14px 9px 0;
+  border-bottom: 1px solid var(--rule-strong);
+  vertical-align: bottom;
+}
+td {
+  padding: 11px 14px 11px 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  color: var(--ink-soft);
+}
+td:first-child { color: var(--ink); font-weight: 500; }
+td code { font-size: 12.5px; }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ----------------------------------------------------------------- notes */
+
+.note {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 16px 20px;
+  margin: 26px 0;
+  border-radius: 0 4px 4px 0;
+  max-width: var(--measure);
+}
+.note p:last-child { margin-bottom: 0; }
+.note .tag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.fail {
+  border-left-color: var(--alert);
+  background: var(--alert-soft);
+}
+.fail .tag { color: var(--alert); }
+
+/* -------------------------------------------------------------- sequence */
+
+.chain {
+  list-style: none;
+  padding: 0;
+  margin: 26px 0;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  overflow: hidden;
+  max-width: var(--measure);
+}
+.chain li {
+  background: var(--surface);
+  padding: 16px 20px 16px 58px;
+  position: relative;
+  margin: 0;
+}
+.chain li::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  left: 20px;
+  top: 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+}
+.chain strong { display: block; font-family: var(--display); font-size: 15px; margin-bottom: 3px; }
+.chain span { font-size: 15px; color: var(--ink-soft); }
+
+/* ------------------------------------------------------------------ code */
+
+pre {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: var(--surface-alt);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  margin: 22px 0;
+  color: var(--ink);
+}
+pre code { background: none; border: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--ink-faint); }
+pre .k { color: var(--accent); }
+
+/* -------------------------------------------------------------- glossary */
+
+dl.gloss { margin: 24px 0; max-width: var(--measure); }
+dl.gloss div {
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  gap: 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+}
+dl.gloss dt {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 14.5px;
+}
+dl.gloss dd { margin: 0; font-size: 15px; color: var(--ink-soft); }
+@media (max-width: 560px) {
+  dl.gloss div { grid-template-columns: 1fr; gap: 3px; }
+}
+
+footer.colophon {
+  border-top: 1px solid var(--rule);
+  margin-top: 20px;
+  padding-top: 26px;
+  font-size: 14.5px;
+  color: var(--ink-faint);
+  max-width: var(--measure);
+}
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 0; }
+  nav.rail {
+    position: static;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 18px 20px;
+    margin-bottom: 44px;
+    background: var(--surface);
+  }
+  nav.rail ol {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+<style>
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+.toolbar { border-bottom: 1px solid var(--rule); background: var(--surface); }
+.toolbar div {
+  max-width: 1180px; margin: 0 auto; padding: 11px 20px;
+  display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline;
+  font-family: var(--display); font-size: 13.5px;
+}
+.toolbar a { color: var(--ink-soft); text-decoration: none; }
+.toolbar a:hover { color: var(--accent); }
+.toolbar .brand { font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
+.toolbar .brand span { color: var(--accent); }
+.toolbar .spacer { margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<div class="toolbar">
+  <div>
+    <a class="brand" href="/">Splice<span>Check</span></a>
+    <a href="/">Inspector</a>
+    <a href="/compare">Pipeline comparison</a>
+    <a href="/monitors">Monitors</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/sthavana/splicecheck">Source</a>
+  </div>
+</div>
+
+
+<div class="shell">
+
+<header class="masthead">
+  <p class="eyebrow">Streaming video · reference</p>
+  <h1>The Ad Insertion Chain</h1>
+  <p class="standfirst">How an ad gets into a stream, from the cue an encoder emits to the impression an
+  ad server counts — and the dozen places along the way it quietly fails to.</p>
+</header>
+
+<div class="layout">
+
+<nav class="rail" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#why">Why it is hard</a></li>
+    <li><a href="#words">The vocabulary</a></li>
+    <li><a href="#chain">The chain, end to end</a></li>
+    <li><a href="#scte35">SCTE-35, in detail</a></li>
+    <li><a href="#carriage">How the cue travels</a></li>
+    <li><a href="#csai">Client-side insertion</a></li>
+    <li><a href="#ssai">Server-side insertion</a></li>
+    <li><a href="#dai">DAI, and the hybrid</a></li>
+    <li><a href="#decisioning">Ad decisioning</a></li>
+    <li><a href="#measurement">Measurement</a></li>
+    <li><a href="#failure">Where it breaks</a></li>
+    <li><a href="#standards">Standards</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============================================================= 1 -->
+<section id="why">
+  <span class="sec-num">01</span>
+  <h2>Why putting an ad in a stream is hard</h2>
+
+  <p class="lede">In broadcast, an ad break is a switch. In streaming, there is no switch — there are
+  millions of independent players, each holding a slightly different piece of the timeline, each
+  needing to be told what to play and when.</p>
+
+  <p>Linear television solved advertising with hardware. A playout automation system fires a relay at
+  a scheduled moment, the router switches from programme to commercial, and every viewer watching that
+  channel sees the same thing at the same instant. The break is a physical event in one building.</p>
+
+  <p>Streaming has none of those properties:</p>
+
+  <ul>
+    <li><strong>There is no single output.</strong> The same content leaves the packager as HLS and
+    DASH, at six or eight bitrates, with several audio languages. Every one of those renditions has to
+    be told about the break identically, or the ad plays on some devices and not others.</li>
+    <li><strong>Viewers are not synchronised.</strong> One is at the live edge, one is thirty seconds
+    behind on a slow connection, one is watching from the start of a DVR window. "Now" is different
+    for each of them.</li>
+    <li><strong>The ad is chosen per viewer.</strong> That is the entire commercial premise —
+    addressable advertising is worth more than a broadcast spot precisely because it is different for
+    each household. So the content cannot be baked in upstream.</li>
+    <li><strong>Everything is best-effort HTTP.</strong> Segments are cached by CDNs, requested out of
+    order, retried, abandoned. There is no guaranteed delivery moment to switch on.</li>
+  </ul>
+
+  <p>So the industry split the problem in two. A <strong>signal</strong> travels with the content
+  saying <em>an ad opportunity begins here and lasts this long</em>. Separately, a
+  <strong>decision</strong> is made about what should fill it. The whole of what follows is the
+  machinery that carries the first and executes the second — and almost every real-world failure lives
+  at the joint between them.</p>
+</section>
+
+<!-- ============================================================= 2 -->
+<section id="words">
+  <span class="sec-num">02</span>
+  <h2>The vocabulary, first</h2>
+
+  <p class="lede">These words are used loosely in conversation and precisely in specifications. The
+  precise meanings are what the systems actually implement.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Term</th><th>What it actually means</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Avail</td><td>An <em>availability</em> — a span of programme time the broadcaster has made available to be replaced by advertising. The opportunity, not the content.</td></tr>
+        <tr><td>Break</td><td>Used interchangeably with avail in practice. Strictly, the break is the interruption as the viewer experiences it.</td></tr>
+        <tr><td>Pod</td><td>The sequence of ads that fills one avail. A 90-second avail might hold a pod of three 30-second spots.</td></tr>
+        <tr><td>Creative</td><td>An individual advert — the actual video file, plus its metadata and tracking URLs.</td></tr>
+        <tr><td>Slate</td><td>Filler shown when the pod does not cover the avail. Often a station ident, a countdown, or black. Slate is the visible symptom of under-fill.</td></tr>
+        <tr><td>Fill rate</td><td>The proportion of available ad inventory actually filled with a paying creative. The number the commercial side cares about most.</td></tr>
+        <tr><td>Cue</td><td>The signal marking the avail boundary. In practice, a SCTE-35 message.</td></tr>
+        <tr><td>Splice point</td><td>The exact instant the switch should happen, expressed as a presentation timestamp.</td></tr>
+        <tr><td>Pre-roll</td><td>Two meanings. (1) An ad before the content starts. (2) The lead time between a cue arriving and the splice point it describes. Context distinguishes them; this page uses <em>lead time</em> for the second.</td></tr>
+        <tr><td>Manifest</td><td>The playlist a player reads to find segments: <code>.m3u8</code> for HLS, <code>.mpd</code> for DASH.</td></tr>
+        <tr><td>Conditioning</td><td>Preparing content so it can be spliced cleanly — an IDR frame at the boundary, segment durations that divide evenly, audio frames that align.</td></tr>
+        <tr><td>Impression</td><td>A counted view of an ad. What is billed. Defined by measurement standards, not by whether a human looked at it.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================= 3 -->
+<section id="chain">
+  <span class="sec-num">03</span>
+  <h2>The chain, end to end</h2>
+
+  <p class="lede">Before the detail, the shape. A cue is born in a control room, survives several format
+  changes, and is finally acted on either by a server or by the player itself.</p>
+
+  <div class="figscroll">
+  <figure>
+    <svg viewBox="0 0 1000 300" role="img" aria-label="The signalling chain: playout automation emits SCTE-104 to the encoder, which emits SCTE-35 in the transport stream to the packager, which writes manifests to the CDN; the ad decision server is consulted either by a server-side stitcher or by the player.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+        </marker>
+        <marker id="ah-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#b44309"/>
+        </marker>
+      </defs>
+
+      <!-- main chain -->
+      <g fill="none" stroke="currentColor" stroke-width="1.25">
+        <rect x="20"  y="96" width="130" height="56" rx="3"/>
+        <rect x="205" y="96" width="130" height="56" rx="3"/>
+        <rect x="390" y="96" width="130" height="56" rx="3"/>
+        <rect x="575" y="96" width="130" height="56" rx="3"/>
+        <rect x="760" y="96" width="130" height="56" rx="3"/>
+      </g>
+
+      <g font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">
+        <text x="85"  y="120">Playout</text><text x="85"  y="136">automation</text>
+        <text x="270" y="120">Encoder</text><text x="270" y="136">/ transcoder</text>
+        <text x="455" y="120">Packager</text><text x="455" y="136">/ origin</text>
+        <text x="640" y="128">CDN</text>
+        <text x="825" y="128">Player</text>
+      </g>
+
+      <g stroke="currentColor" stroke-width="1.25" marker-end="url(#ah)">
+        <line x1="150" y1="124" x2="200" y2="124"/>
+        <line x1="335" y1="124" x2="385" y2="124"/>
+        <line x1="520" y1="124" x2="570" y2="124"/>
+        <line x1="705" y1="124" x2="755" y2="124"/>
+      </g>
+
+      <g font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.75">
+        <text x="175" y="114">SCTE-104</text>
+        <text x="360" y="114">SCTE-35</text>
+        <text x="360" y="150">in the TS</text>
+        <text x="545" y="114">manifest</text>
+        <text x="545" y="150">+ segments</text>
+        <text x="730" y="114">HTTP</text>
+      </g>
+
+      <!-- ad decision server -->
+      <g fill="none" stroke="#b44309" stroke-width="1.5">
+        <rect x="480" y="228" width="170" height="50" rx="3"/>
+      </g>
+      <text x="565" y="250" font-family="Archivo, sans-serif" font-size="13" fill="#b44309" text-anchor="middle">Ad decision server</text>
+      <text x="565" y="266" font-family="JetBrains Mono, monospace" font-size="10" fill="#b44309" text-anchor="middle">VAST / VMAP</text>
+
+      <!-- stitcher -->
+      <g fill="none" stroke="#0f6b63" stroke-width="1.5">
+        <rect x="575" y="20" width="130" height="46" rx="3"/>
+      </g>
+      <text x="640" y="40" font-family="Archivo, sans-serif" font-size="13" fill="#0f6b63" text-anchor="middle">SSAI stitcher</text>
+      <text x="640" y="55" font-family="JetBrains Mono, monospace" font-size="10" fill="#0f6b63" text-anchor="middle">server-side</text>
+
+      <g stroke="#0f6b63" stroke-width="1.25" marker-end="url(#ah)" color="#0f6b63">
+        <line x1="640" y1="96" x2="640" y2="70"/>
+      </g>
+
+      <g stroke="#b44309" stroke-width="1.25" stroke-dasharray="4 3" marker-end="url(#ah-a)">
+        <path d="M 565 228 L 565 150 L 620 90 L 632 70" fill="none"/>
+        <path d="M 640 228 L 830 228 L 830 158" fill="none"/>
+      </g>
+
+      <text x="700" y="200" font-family="JetBrains Mono, monospace" font-size="10" fill="#b44309">server-side ask</text>
+      <text x="845" y="200" font-family="JetBrains Mono, monospace" font-size="10" fill="#b44309">client-side ask</text>
+    </svg>
+    <figcaption>The cue travels left to right, changing format twice. The ad decision server sits off
+    to one side and is consulted by exactly one of two parties — the stitcher (server-side) or the
+    player (client-side). Which one it is defines the whole architecture.</figcaption>
+  </figure>
+  </div>
+
+  <ol class="chain">
+    <li><strong>Playout automation decides</strong><span>A scheduling system knows the break is coming. It emits <code>SCTE-104</code> over ethernet to the encoder, or embeds it in the SDI ancillary data.</span></li>
+    <li><strong>The encoder translates</strong><span>SCTE-104 becomes <code>SCTE-35</code>, a binary section carried in the compressed transport stream on its own PID, timed against the same clock as the video.</span></li>
+    <li><strong>The packager transcribes</strong><span>The packager reads the SCTE-35 and writes it into the manifests it produces — as HLS tags, DASH periods, or event streams. This is a <em>translation</em>, and translations can be wrong.</span></li>
+    <li><strong>The CDN distributes</strong><span>Manifests and segments are cached and served. The CDN has no idea any of this is about advertising.</span></li>
+    <li><strong>Someone acts on it</strong><span>Either a server-side service rewrites the manifest with ad segments in it, or the player reads the markers and handles the break itself.</span></li>
+    <li><strong>Impressions are counted</strong><span>Tracking beacons fire at start, 25%, 50%, 75% and completion. Whoever played the ad is responsible for firing them.</span></li>
+  </ol>
+
+  <div class="note">
+    <span class="tag">The joint that matters</span>
+    <p>Step 3 is where most real faults originate and where almost nobody looks. The encoder's cue and
+    the packager's tag are two different artefacts describing the same event, produced by different
+    vendors' software. Nothing in the normal delivery path compares them.</p>
+  </div>
+</section>
+
+<!-- ============================================================= 4 -->
+<section id="scte35">
+  <span class="sec-num">04</span>
+  <h2>SCTE-35, in detail</h2>
+
+  <p class="lede">ANSI/SCTE 35 defines a single binary structure, the
+  <code>splice_info_section</code>, that says something is about to happen on this stream at this
+  timestamp. Everything else about ad insertion is built on it.</p>
+
+  <p>A section is typically 20–200 bytes. It carries a command, an optional list of descriptors, and a
+  CRC. Here is one, decoded:</p>
+
+<pre><code><span class="c"># base64: /DAvAAAAAAAA///wFAVIAACPf+/+c2nALv4AUsz1AAAAAAAKAAhDVUVJAAABNWLbowo=</span>
+
+table_id            0xFC
+section_length      47
+protocol_version    0
+<span class="k">pts_adjustment      0</span>          <span class="c">← added to every timestamp below</span>
+tier                0xFFF
+<span class="k">splice_command      splice_insert</span>
+
+  splice_event_id       0x4800008F
+  out_of_network        true       <span class="c">← leaving the programme</span>
+  program_splice        true
+  <span class="k">splice_time.pts_time  1936310318</span> <span class="c">← 90kHz ticks = 21514.6s</span>
+  break_duration        60.294s
+  auto_return           true       <span class="c">← come back automatically</span>
+  unique_program_id     0
+  avail_num / expected  0 / 0
+
+descriptors         1 × avail_descriptor (CUEI)
+<span class="k">CRC_32              valid</span></code></pre>
+
+  <h3>Two commands do nearly all the work</h3>
+
+  <div class="split">
+    <div>
+      <h4>splice_insert</h4>
+      <p>The older, simpler form, inherited from cable. It says directly: leave the network now (or at
+      this PTS), for this long, and optionally come back by yourself.</p>
+      <p><code>out_of_network</code> distinguishes the departure from the return.
+      <code>auto_return</code> means no closing signal will be sent — the duration is the whole
+      contract.</p>
+    </div>
+    <div>
+      <h4>time_signal + segmentation_descriptor</h4>
+      <p>The modern form. <code>time_signal</code> carries only a timestamp; all meaning lives in the
+      descriptors attached to it.</p>
+      <p>A <code>segmentation_descriptor</code> says what <em>kind</em> of boundary this is
+      (<code>0x30</code> Provider Advertisement Start, <code>0x31</code> its End,
+      <code>0x34</code>/<code>0x35</code> Placement Opportunity, <code>0x10</code>/<code>0x11</code>
+      Programme Start and End) and carries an identifier for the segment.</p>
+    </div>
+  </div>
+
+  <h3>The fields that cause real trouble</h3>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Field</th><th>Why it matters in practice</th></tr></thead>
+      <tbody>
+        <tr><td><code>pts_time</code></td><td>The splice point on the 90kHz presentation clock. 33 bits, so it wraps every 26.5 hours — code that forgets this breaks roughly once a day.</td></tr>
+        <tr><td><code>pts_adjustment</code></td><td>Added to every timestamp in the section. Non-zero when a device has re-timed the stream. Ignoring it puts every break in the wrong place.</td></tr>
+        <tr><td><code>splice_immediate_flag</code></td><td>"Switch now, no timestamp." Leaves the ad decision server no time to fetch creatives; a common cause of slate on the first seconds of a break.</td></tr>
+        <tr><td><code>segmentation_upid</code></td><td>Identifies what is being segmented. Types include Ad-ID, EIDR, UUID, and <code>MPU</code> — a vendor-defined blob that in practice often carries JSON with pod position and asset identifiers.</td></tr>
+        <tr><td><code>segmentation_duration</code></td><td>40 bits at 90kHz. Where present, it defines the avail length without needing a closing descriptor.</td></tr>
+        <tr><td><code>CRC_32</code></td><td>MPEG-2 style, over the whole section. Strict decisioning rejects a bad CRC outright — and a bad CRC is usually invisible, because most tools never check it.</td></tr>
+        <tr><td><code>tier</code></td><td>Lets a downstream device filter sections not intended for it. Rarely used, occasionally the reason a cue appears to vanish.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="tag">Lead time</span>
+    <p>The most consequential property of a cue is not in the spec at all: how far ahead of the splice
+    point it arrives. An ad decision server needs to call out, select a pod, and have creatives
+    transcoded and ready. Under about four seconds of lead time, fill rates fall sharply. Four to eight
+    seconds is the usual target, and encoders are configured to emit cues that far in advance.</p>
+  </div>
+</section>
+
+<!-- ============================================================= 5 -->
+<section id="carriage">
+  <span class="sec-num">05</span>
+  <h2>How the cue travels</h2>
+
+  <p class="lede">The same 35 bytes are carried five different ways depending on where in the chain you
+  look. Knowing which carriage you are reading is most of knowing what can go wrong.</p>
+
+  <div class="figscroll">
+  <figure>
+    <svg viewBox="0 0 980 340" role="img" aria-label="One SCTE-35 section fans out into five carriages: a transport stream PID, an ID3 PRIV frame in a metadata PES, an emsg box in CMAF segments, HLS manifest tags, and DASH periods or event streams.">
+      <defs>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <rect x="24" y="140" width="150" height="58" rx="3" fill="none" stroke="#b44309" stroke-width="1.5"/>
+      <text x="99" y="164" font-family="Archivo, sans-serif" font-size="13" fill="#b44309" text-anchor="middle">splice_info</text>
+      <text x="99" y="180" font-family="Archivo, sans-serif" font-size="13" fill="#b44309" text-anchor="middle">_section</text>
+
+      <g fill="none" stroke="currentColor" stroke-width="1.15">
+        <rect x="380" y="16"  width="270" height="48" rx="3"/>
+        <rect x="380" y="82"  width="270" height="48" rx="3"/>
+        <rect x="380" y="148" width="270" height="48" rx="3"/>
+        <rect x="380" y="214" width="270" height="48" rx="3"/>
+        <rect x="380" y="280" width="270" height="48" rx="3"/>
+      </g>
+
+      <g font-family="Archivo, sans-serif" font-size="13" fill="currentColor">
+        <text x="396" y="37">Section on a PID</text>
+        <text x="396" y="103">ID3 PRIV in a PES</text>
+        <text x="396" y="169">emsg box</text>
+        <text x="396" y="235">HLS manifest tags</text>
+        <text x="396" y="301">DASH periods</text>
+      </g>
+      <g font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.72">
+        <text x="396" y="53">stream_type 0x86 — the broadcast form</text>
+        <text x="396" y="119">stream_type 0x15 — the usual HLS form</text>
+        <text x="396" y="185">CMAF and DASH segments, versions 0 and 1</text>
+        <text x="396" y="251">EXT-X-DATERANGE, EXT-X-CUE-OUT/IN</text>
+        <text x="396" y="317">EventStream, or a Period per avail</text>
+      </g>
+
+      <g stroke="currentColor" stroke-width="1.15" marker-end="url(#ah2)" fill="none">
+        <path d="M 174 160 C 260 160 270 40 375 40"/>
+        <path d="M 174 164 C 260 164 270 106 375 106"/>
+        <path d="M 174 169 C 270 169 280 172 375 172"/>
+        <path d="M 174 176 C 260 176 270 238 375 238"/>
+        <path d="M 174 180 C 260 180 270 304 375 304"/>
+      </g>
+
+      <text x="668" y="102" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.72">in the media</text>
+      <text x="668" y="270" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.72">in the manifest</text>
+
+      <line x1="368" y1="8" x2="368" y2="200" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity="0.4"/>
+      <line x1="368" y1="206" x2="368" y2="332" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity="0.4"/>
+    </svg>
+    <figcaption>One section, five carriages. The top three ride inside the media and are what the
+    encoder actually emitted; the bottom two are the packager's transcription of it. A disagreement
+    between the two groups is invisible to every normal player.</figcaption>
+  </figure>
+  </div>
+
+  <h3>In the media</h3>
+
+  <p><strong>Transport stream, own PID.</strong> The PMT declares an elementary stream of
+  <code>stream_type 0x86</code>, and <code>splice_info_section</code>s arrive on that PID. This is the
+  contribution and broadcast form — the signal as it leaves the encoder.</p>
+
+  <p><strong>ID3 <code>PRIV</code> frame in a metadata PES.</strong> Despite the above, most HLS
+  transport streams carry the cue this way instead: a <code>stream_type 0x15</code> metadata stream
+  whose PES packets contain an ID3 tag, with a <code>PRIV</code> frame owned by
+  <code>urn:scte:scte35:2013:bin</code> wrapping the raw section. The PES header's PTS places it on the
+  clock. A tool that only looks for <code>0x86</code> will report "no inband signalling" on a stream
+  that is full of it.</p>
+
+  <p><strong><code>emsg</code> box.</strong> In CMAF and DASH, an Event Message Box sits at the top
+  level of a segment, ahead of the <code>moof</code>. Version 0 is timed relative to the segment;
+  version 1 carries an absolute media time. The MPD advertises this with
+  <code>&lt;InbandEventStream&gt;</code>.</p>
+
+  <h3>In the manifest</h3>
+
+  <p><strong>HLS.</strong> There are three conventions and streams often use two at once:</p>
+
+<pre><code><span class="c"># the modern form — carries the section, base64 or hex</span>
+#EXT-X-DATERANGE:ID="b1",START-DATE="2026-09-18T10:00:12.000Z",
+                 PLANNED-DURATION=30.0,SCTE35-OUT=0xFC3020...
+
+<span class="c"># the widely-implemented form — just brackets the break</span>
+#EXT-X-CUE-OUT:30.000
+#EXT-X-DISCONTINUITY
+... ad segments ...
+#EXT-X-CUE-IN
+
+<span class="c"># vendor forms still in the wild</span>
+#EXT-OATCLS-SCTE35:/DAvAAAA...
+#EXT-X-SCTE35:CUE="/DAvAAAA..."</code></pre>
+
+  <p><strong>DASH.</strong> Two quite different models. Either a Period-level
+  <code>&lt;EventStream&gt;</code> carries events with a <code>presentationTime</code> and
+  <code>duration</code>, or — more commonly for stitched output — <strong>each avail becomes its own
+  Period</strong>. The multi-period model is structurally cleaner but introduces its own class of
+  problem: period continuity, presentation time offsets, and whether the ad period presents the same
+  representations as the content around it.</p>
+
+  <div class="note">
+    <span class="tag">HLS interstitials</span>
+    <p>A newer, different model: <code>EXT-X-DATERANGE</code> with
+    <code>CLASS="com.apple.hls.interstitial"</code> names an asset (<code>X-ASSET-URI</code>) or an
+    asset list for the <em>player</em> to fetch and play. Nothing is spliced into the playlist at all.
+    It is closer to client-side insertion wearing manifest clothing, and it is measured differently —
+    duration and fill depend on what the asset list returns at playback.</p>
+  </div>
+</section>
+
+<!-- ============================================================= 6 -->
+<section id="csai">
+  <span class="sec-num">06</span>
+  <h2>Client-side ad insertion</h2>
+
+  <p class="lede">The player does the work. It sees the break coming, pauses the content, asks an ad
+  server what to play, fetches the creative, plays it, fires the tracking, and resumes.</p>
+
+  <div class="figscroll">
+  <figure>
+    <svg viewBox="0 0 960 300" role="img" aria-label="Client-side insertion: the player loads content from the CDN, and separately its ad SDK requests VAST from the ad decision server, fetches the creative from an ad CDN, plays it in a second video element, and fires tracking beacons directly.">
+      <defs>
+        <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#1c4ed8"/>
+        </marker>
+        <marker id="ah3g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <rect x="30" y="112" width="140" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+      <text x="100" y="140" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Content CDN</text>
+      <text x="100" y="156" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.7">unmodified</text>
+
+      <rect x="360" y="90" width="190" height="104" rx="3" fill="none" stroke="#1c4ed8" stroke-width="1.75"/>
+      <text x="455" y="120" font-family="Archivo, sans-serif" font-size="14" fill="#1c4ed8" text-anchor="middle">Player</text>
+      <line x1="376" y1="132" x2="534" y2="132" stroke="#1c4ed8" stroke-width="0.75" opacity="0.5"/>
+      <text x="455" y="152" font-family="Archivo, sans-serif" font-size="12" fill="#1c4ed8" text-anchor="middle">ad SDK</text>
+      <text x="455" y="172" font-family="JetBrains Mono, monospace" font-size="10" fill="#1c4ed8" text-anchor="middle" opacity="0.8">2nd video element</text>
+
+      <rect x="740" y="26" width="180" height="56" rx="3" fill="none" stroke="#b44309" stroke-width="1.5"/>
+      <text x="830" y="49" font-family="Archivo, sans-serif" font-size="13" fill="#b44309" text-anchor="middle">Ad decision server</text>
+      <text x="830" y="65" font-family="JetBrains Mono, monospace" font-size="10" fill="#b44309" text-anchor="middle">returns VAST</text>
+
+      <rect x="740" y="112" width="180" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+      <text x="830" y="141" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Ad CDN</text>
+
+      <rect x="740" y="198" width="180" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+      <text x="830" y="221" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Tracking</text>
+      <text x="830" y="237" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.7">beacons</text>
+
+      <g stroke="currentColor" stroke-width="1.25" marker-end="url(#ah3g)" fill="none">
+        <line x1="170" y1="142" x2="355" y2="142"/>
+      </g>
+      <text x="262" y="134" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.72">segments + cue</text>
+
+      <g stroke="#1c4ed8" stroke-width="1.35" marker-end="url(#ah3)" fill="none">
+        <path d="M 550 116 C 640 116 660 54 735 54"/>
+        <path d="M 550 140 L 735 140"/>
+        <path d="M 550 168 C 640 168 660 226 735 226"/>
+      </g>
+      <g font-family="JetBrains Mono, monospace" font-size="10" fill="#1c4ed8">
+        <text x="600" y="80">1 · ad request</text>
+        <text x="600" y="132">2 · creative</text>
+        <text x="600" y="206">3 · impression</text>
+      </g>
+    </svg>
+    <figcaption>Everything ad-related happens in the client, over separate connections to separate
+    hosts. The content stream is delivered untouched — which is the architecture's chief virtue and the
+    source of every one of its weaknesses.</figcaption>
+  </figure>
+  </div>
+
+  <h3>What actually happens</h3>
+
+  <ol>
+    <li>The player, or an SDK inside it, reads the ad markers — or is given a schedule up front via VMAP.</li>
+    <li>At the break, it issues an <strong>ad request</strong> to the ad decision server: a URL carrying device type, consent state, content identifiers, and targeting parameters.</li>
+    <li>The server returns <strong>VAST</strong> — an XML document naming one or more creatives, their durations, their media file URLs at several bitrates, and a list of tracking URLs.</li>
+    <li>The SDK loads the creative into a second video element, hides the content element, and plays.</li>
+    <li>It fires tracking beacons at start, first quartile, midpoint, third quartile and complete.</li>
+    <li>It swaps back and seeks the content element to the return point.</li>
+  </ol>
+
+  <div class="split client">
+    <div>
+      <h4>What it is good at</h4>
+      <ul>
+        <li>The player knows everything about the viewer — screen size, volume, viewability, consent — so targeting and verification are rich.</li>
+        <li>Interactive formats work: clickthrough, overlays, skippable ads with a countdown.</li>
+        <li>No transcoding of the ad is required. The creative plays as delivered.</li>
+        <li>Content delivery is untouched, so a failure in the ad path cannot break playback.</li>
+      </ul>
+    </div>
+    <div>
+      <h4>What goes wrong</h4>
+      <ul>
+        <li><strong>Ad blockers.</strong> The ad request goes to a recognisable third-party host from the client. It is trivially blocked, and widely is.</li>
+        <li><strong>Buffering at the switch.</strong> Two video elements, two decoders, two connections. The transition is visible on weak devices and slow networks.</li>
+        <li><strong>SDK availability.</strong> Smart TVs, set-top boxes and games consoles each need a working SDK. Coverage is never complete.</li>
+        <li><strong>Latency.</strong> The ad request happens at the break, so its round trip is in the critical path.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================= 7 -->
+<section id="ssai">
+  <span class="sec-num">07</span>
+  <h2>Server-side ad insertion</h2>
+
+  <p class="lede">A service between the origin and the player rewrites the manifest so the ad segments
+  sit in it as though they were always part of the programme. The player just plays a stream.</p>
+
+  <div class="figscroll">
+  <figure>
+    <svg viewBox="0 0 960 320" role="img" aria-label="Server-side insertion: the player requests a personalised manifest from the stitcher, which reads the origin manifest, asks the ad decision server for a pod, and returns a manifest with ad segments spliced in; the stitcher fires the tracking itself.">
+      <defs>
+        <marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f6b63"/>
+        </marker>
+        <marker id="ah4g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <rect x="26" y="126" width="132" height="58" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+      <text x="92" y="150" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Origin</text>
+      <text x="92" y="166" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.7">with cues</text>
+
+      <rect x="330" y="112" width="200" height="86" rx="3" fill="none" stroke="#0f6b63" stroke-width="1.75"/>
+      <text x="430" y="142" font-family="Archivo, sans-serif" font-size="14" fill="#0f6b63" text-anchor="middle">SSAI stitcher</text>
+      <text x="430" y="162" font-family="JetBrains Mono, monospace" font-size="10" fill="#0f6b63" text-anchor="middle">per-session manifest</text>
+      <text x="430" y="180" font-family="JetBrains Mono, monospace" font-size="10" fill="#0f6b63" text-anchor="middle">+ tracking</text>
+
+      <rect x="700" y="126" width="140" height="58" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+      <text x="770" y="155" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Player</text>
+
+      <rect x="330" y="248" width="200" height="52" rx="3" fill="none" stroke="#b44309" stroke-width="1.5"/>
+      <text x="430" y="270" font-family="Archivo, sans-serif" font-size="13" fill="#b44309" text-anchor="middle">Ad decision server</text>
+      <text x="430" y="286" font-family="JetBrains Mono, monospace" font-size="10" fill="#b44309" text-anchor="middle">VAST, per session</text>
+
+      <rect x="330" y="22" width="200" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+      <text x="430" y="44" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Conditioned ads</text>
+      <text x="430" y="60" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.7">same codec, GOP, rate</text>
+
+      <g stroke="currentColor" stroke-width="1.25" marker-end="url(#ah4g)" fill="none">
+        <line x1="158" y1="155" x2="325" y2="155"/>
+      </g>
+      <text x="240" y="147" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.72">manifest + cues</text>
+
+      <g stroke="#0f6b63" stroke-width="1.35" marker-end="url(#ah4)" fill="none">
+        <line x1="530" y1="155" x2="695" y2="155"/>
+        <line x1="430" y1="248" x2="430" y2="202"/>
+        <line x1="430" y1="112" x2="430" y2="78"/>
+      </g>
+      <text x="612" y="147" font-family="JetBrains Mono, monospace" font-size="10" fill="#0f6b63" text-anchor="middle">one stitched manifest</text>
+      <text x="446" y="228" font-family="JetBrains Mono, monospace" font-size="10" fill="#0f6b63">asks for a pod</text>
+      <text x="446" y="98" font-family="JetBrains Mono, monospace" font-size="10" fill="#0f6b63">splices segments</text>
+    </svg>
+    <figcaption>The player has one connection, to one host, and receives what looks like an ordinary
+    stream. Every ad-related decision has moved server-side — including the responsibility for counting
+    the impression.</figcaption>
+  </figure>
+  </div>
+
+  <h3>What actually happens</h3>
+
+  <ol>
+    <li>The player requests a manifest from the stitcher, not the origin. It receives a
+    <strong>session-specific URL</strong> — every viewer gets their own.</li>
+    <li>The stitcher polls the origin manifest and watches for cues.</li>
+    <li>When an avail approaches, it calls the ad decision server with that session's targeting data and
+    receives a pod.</li>
+    <li>It rewrites the manifest: the ad's segments are listed inline, bracketed by discontinuity tags,
+    in place of the programme segments the avail covers.</li>
+    <li>The player fetches and plays those segments like any others.</li>
+    <li>The stitcher fires the tracking beacons, inferring progress from which segments were
+    requested.</li>
+  </ol>
+
+  <h3>Conditioning: the unglamorous prerequisite</h3>
+
+  <p>For the splice to be invisible, the ad has to be encoded compatibly with the content: same codec
+  and profile, same resolution ladder, same audio configuration, segment durations that divide the
+  avail evenly, and an IDR frame at every segment boundary. Ads arrive from agencies as single MP4
+  files at arbitrary settings, so an SSAI platform runs a <strong>conditioning pipeline</strong> that
+  transcodes and segments every creative to match every publisher's ladder, in advance.</p>
+
+  <p>This is most of the operational cost of running SSAI, and when a break plays badly the cause is
+  frequently here rather than in the signalling.</p>
+
+  <div class="split server">
+    <div>
+      <h4>What it is good at</h4>
+      <ul>
+        <li>Ad blockers cannot distinguish ad segments from content segments — they come from the same host, in the same format, on the same connection.</li>
+        <li>No SDK required. Anything that can play the stream can play the ads, which matters enormously for long-tail smart TVs.</li>
+        <li>Seamless playback: one decoder, one buffer, no switch.</li>
+        <li>The ad request happens ahead of the break, off the critical path.</li>
+      </ul>
+    </div>
+    <div>
+      <h4>What goes wrong</h4>
+      <ul>
+        <li><strong>Under-fill.</strong> The pod does not cover the avail and the tail is slate or black. Directly measurable lost revenue.</li>
+        <li><strong>Passthrough.</strong> The break is opened and filled with the programme itself. The manifest is well-formed, the player is happy, and no ad was delivered.</li>
+        <li><strong>Missing discontinuities.</strong> Substituted content without a discontinuity tag makes players glitch, stall or drop audio at the splice.</li>
+        <li><strong>Weaker measurement.</strong> The server infers viewing from segment requests. It cannot see whether the player was muted, backgrounded or off-screen.</li>
+        <li><strong>Cache efficiency.</strong> Per-session manifests are unique, so manifest caching is lost (segments still cache).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================= 8 -->
+<section id="dai">
+  <span class="sec-num">08</span>
+  <h2>DAI, and why the terms blur</h2>
+
+  <p class="lede"><strong>Dynamic Ad Insertion</strong> is the umbrella: any system that decides at
+  playback time what ad a given viewer sees, rather than baking it in. Both CSAI and SSAI are DAI.</p>
+
+  <p>The term is muddied because Google's product is literally called DAI, and it is a server-side
+  product — so in many conversations "DAI" is used to mean SSAI specifically. When someone says DAI,
+  it is worth establishing which they mean.</p>
+
+  <p>The distinction that actually matters is not client versus server. It is <strong>who talks to the
+  ad decision server, and who is responsible for counting the impression</strong>. Everything else
+  follows from that.</p>
+
+  <h3>Hybrid, in practice</h3>
+
+  <p>Most large deployments are not pure. Common combinations:</p>
+
+  <ul>
+    <li><strong>Server-side stitching with client-side tracking.</strong> The stitcher splices the ads
+    but passes the tracking URLs to the player over a side-channel, so beacons fire from the client
+    with real viewability data. This is the most common serious configuration, and it is what
+    SCTE-130 and the IAB's server-side guidance were written to support.</li>
+    <li><strong>Server-side for live, client-side for VOD.</strong> Live needs the robustness; VOD can
+    afford the richer client formats.</li>
+    <li><strong>Interstitials.</strong> HLS interstitials are a third model: the manifest names an asset
+    and the player fetches it. Server-signalled, client-executed.</li>
+  </ul>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th></th><th>Client-side</th><th>Server-side</th></tr></thead>
+      <tbody>
+        <tr><td>Who asks the ad server</td><td>Player SDK</td><td>Stitcher</td></tr>
+        <tr><td>Ad blocker resistant</td><td>No</td><td>Yes</td></tr>
+        <tr><td>Needs an SDK per device</td><td>Yes</td><td>No</td></tr>
+        <tr><td>Playback seam</td><td>Visible on weak devices</td><td>Invisible when conditioned</td></tr>
+        <tr><td>Interactive formats</td><td>Full</td><td>Limited</td></tr>
+        <tr><td>Viewability signals</td><td>Rich</td><td>Inferred</td></tr>
+        <tr><td>Ad request timing</td><td>At the break</td><td>Ahead of the break</td></tr>
+        <tr><td>Creative preparation</td><td>None</td><td>Conditioning pipeline</td></tr>
+        <tr><td>Typical failure</td><td>Blocked or timed out</td><td>Under-filled or passed through</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================= 9 -->
+<section id="decisioning">
+  <span class="sec-num">09</span>
+  <h2>Ad decisioning</h2>
+
+  <p class="lede">The signalling says an avail exists. Decisioning decides what goes in it — and that
+  is a separate industry with its own protocols.</p>
+
+  <h3>VAST, VMAP and the response</h3>
+
+  <p><strong>VAST</strong> (Video Ad Serving Template) is the response format: XML describing one
+  creative — its duration, its media files at several bitrates and codecs, its clickthrough, and its
+  tracking URLs. A <strong>VAST wrapper</strong> points at another VAST document on another server,
+  which is how ad networks chain; each hop adds latency and a chance of failure.</p>
+
+  <p><strong>VMAP</strong> (Video Multiple Ad Playlist) describes the <em>schedule</em> — where the
+  breaks are in a piece of content and what kind of ad each takes. It is used mainly for VOD, where the
+  break positions are known in advance. Live uses the in-stream cues instead.</p>
+
+<pre><code><span class="c">&lt;!-- VAST, reduced to the parts that matter --&gt;</span>
+&lt;Ad id="1187"&gt;
+  &lt;InLine&gt;
+    &lt;Creatives&gt;&lt;Creative&gt;&lt;Linear&gt;
+      <span class="k">&lt;Duration&gt;00:00:30&lt;/Duration&gt;</span>
+      &lt;MediaFiles&gt;
+        &lt;MediaFile bitrate="2000" width="1920" height="1080"
+                   type="video/mp4"&gt;https://…/creative-1080.mp4&lt;/MediaFile&gt;
+      &lt;/MediaFiles&gt;
+      &lt;TrackingEvents&gt;
+        <span class="k">&lt;Tracking event="start"&gt;…&lt;/Tracking&gt;</span>
+        &lt;Tracking event="firstQuartile"&gt;…&lt;/Tracking&gt;
+        &lt;Tracking event="midpoint"&gt;…&lt;/Tracking&gt;
+        &lt;Tracking event="thirdQuartile"&gt;…&lt;/Tracking&gt;
+        <span class="k">&lt;Tracking event="complete"&gt;…&lt;/Tracking&gt;</span>
+      &lt;/TrackingEvents&gt;
+    &lt;/Linear&gt;&lt;/Creative&gt;&lt;/Creatives&gt;
+  &lt;/InLine&gt;
+&lt;/Ad&gt;</code></pre>
+
+  <h3>Building a pod</h3>
+
+  <p>A 90-second avail is not one 90-second ad. The decision server assembles a pod under constraints
+  that are commercial as much as technical: separation rules (no two car advertisers adjacent),
+  frequency capping per viewer, priority between guaranteed and programmatic demand, and the simple
+  arithmetic of fitting 15s and 30s spots into the exact avail length.</p>
+
+  <p>When the arithmetic does not work out, the remainder is filled with house ads, a promo, or slate.
+  That gap is what a fill-rate metric is measuring.</p>
+
+  <div class="note">
+    <span class="tag">Where the money is decided</span>
+    <p>Demand reaches the decision server through direct-sold campaigns, programmatic exchanges, or a
+    waterfall of both. In live streaming the whole decision — request, auction, pod assembly, response
+    — has to complete inside the lead time the cue provided. This is why the four-second figure in
+    §04 is not a technicality: it is the budget the entire commercial stack has to fit inside.</p>
+  </div>
+</section>
+
+<!-- ============================================================= 10 -->
+<section id="measurement">
+  <span class="sec-num">10</span>
+  <h2>Measurement, and why it is contested</h2>
+
+  <p class="lede">An impression is what gets billed, so the definition of one is a commercial
+  instrument, not just a technical event.</p>
+
+  <p>The standard progression fires five beacons: <code>start</code>, <code>firstQuartile</code>,
+  <code>midpoint</code>, <code>thirdQuartile</code>, <code>complete</code>. Billing usually keys on
+  <code>start</code> or on a viewability threshold; completion rate is a quality metric that buyers
+  scrutinise.</p>
+
+  <h3>Client-side tracking</h3>
+  <p>The player knows whether the video element was visible, what proportion of it was on screen, and
+  whether audio was muted. The IAB's viewability standard for video — 50% of pixels for two continuous
+  seconds — is only measurable from the client, and <strong>OMID</strong> (Open Measurement) exists to
+  let third-party verification vendors observe this inside the player.</p>
+
+  <h3>Server-side tracking</h3>
+  <p>The stitcher infers playback from which segments were requested. This is robust against blocking
+  and works on devices with no SDK, but it cannot see the screen. A segment request proves bytes were
+  delivered, not that anyone was watching — and a player that buffers ahead then abandons will look
+  like a completed view unless the stitcher is careful.</p>
+
+  <div class="note">
+    <span class="tag">Why hybrids exist</span>
+    <p>Server-side delivery with client-side tracking gets the robustness of SSAI and the measurement
+    quality of CSAI, at the cost of a side-channel between them. The complexity is real, which is why
+    plenty of deployments accept server-side tracking and the discount that comes with it.</p>
+  </div>
+
+  <p>There is also the adversarial dimension. <strong>SIVT</strong> (Sophisticated Invalid Traffic) —
+  bots, spoofed devices, server farms requesting segments — is a persistent tax, and server-side
+  tracking is more exposed to it because there is less signal available to distinguish a real player
+  from a script requesting segments on schedule.</p>
+</section>
+
+<!-- ============================================================= 11 -->
+<section id="failure">
+  <span class="sec-num">11</span>
+  <h2>Where it breaks</h2>
+
+  <p class="lede">Almost every failure below leaves the stream playing perfectly. That is the defining
+  characteristic of this class of fault, and the reason it goes undetected for so long.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Failure</th><th>Symptom</th><th>Usual cause</th></tr></thead>
+      <tbody>
+        <tr><td>Avail not stitched</td><td>Programme plays where an ad should be. No impression, no revenue, nothing in the logs.</td><td>Cue lost between packager and stitcher; ad request timed out</td></tr>
+        <tr><td>Passthrough</td><td>Break opens, programme content fills it. Looks healthy from every angle except revenue.</td><td>Ad server returned nothing and the stitcher fell back to content</td></tr>
+        <tr><td>Under-fill</td><td>Slate, black or an early return at the tail of the break.</td><td>Pod shorter than the avail; no filler configured</td></tr>
+        <tr><td>Over-fill</td><td>Return to programme is late; first moments after the break are cut.</td><td>Pod longer than the avail; duration disagreement</td></tr>
+        <tr><td>Missing discontinuity</td><td>Freeze, stall or audio drop at the splice.</td><td>Substituted content without <code>EXT-X-DISCONTINUITY</code> or a period boundary</td></tr>
+        <tr><td>Rendition mismatch</td><td>"It only fails on cellular" / "only on Roku".</td><td>Renditions carry different ad signalling; player picked the wrong one</td></tr>
+        <tr><td>Manifest/inband disagreement</td><td>Ad starts seconds early or late.</td><td>Packager transcribed the cue to a different instant than the encoder emitted</td></tr>
+        <tr><td>Stale CRC</td><td>Break silently ignored by strict decisioning.</td><td>Section rewritten without recomputing CRC-32</td></tr>
+        <tr><td>Short lead time</td><td>Slate on the first seconds of every break.</td><td><code>splice_immediate_flag</code>, or cues emitted too close to the splice point</td></tr>
+        <tr><td>Reused event ID</td><td>Second break discarded as a duplicate; reporting merged.</td><td>Encoder not incrementing <code>segmentation_event_id</code></td></tr>
+        <tr><td>Period discontinuity</td><td>Stutter or repeated frame at every ad transition in DASH.</td><td>Period timeline gap or overlap; PTO disagreeing with <code>Period@start</code></td></tr>
+        <tr><td>Decoder re-init</td><td>Visible glitch at every boundary even when nothing is wrong.</td><td>Continuous periods not declaring <code>period-continuity</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note fail">
+    <span class="tag">The hard part</span>
+    <p>None of these raise an error anywhere. The CDN serves 200s, the player reports no errors, QoE
+    dashboards stay green. The only signals are commercial — fill rate drifting down, impressions not
+    reconciling — and by the time someone notices, the evidence has rolled out of the DVR window.</p>
+    <p>Which is why the tooling that matters here is not player monitoring. It is something that reads
+    the signalling itself, continuously, and knows the difference between a real fault and a live
+    window behaving normally.</p>
+  </div>
+</section>
+
+<!-- ============================================================= 12 -->
+<section id="standards">
+  <span class="sec-num">12</span>
+  <h2>The standards, and who owns them</h2>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Standard</th><th>Body</th><th>What it covers</th></tr></thead>
+      <tbody>
+        <tr><td>SCTE 35</td><td>SCTE</td><td>The <code>splice_info_section</code> — the cue itself, its commands and descriptors.</td></tr>
+        <tr><td>SCTE 104</td><td>SCTE</td><td>Automation to encoder. How a playout system tells the encoder to emit a cue.</td></tr>
+        <tr><td>SCTE 224</td><td>SCTE</td><td>Event scheduling and notification. Policy: <em>what should be done</em> at a signal — blackouts, alternate content, audience rules.</td></tr>
+        <tr><td>SCTE 130</td><td>SCTE</td><td>Advertising system interfaces — the messaging between placement, decisioning and reporting systems.</td></tr>
+        <tr><td>VAST / VMAP</td><td>IAB Tech Lab</td><td>The ad response and the ad schedule.</td></tr>
+        <tr><td>OMID</td><td>IAB Tech Lab</td><td>Open Measurement — third-party viewability verification inside the player.</td></tr>
+        <tr><td>RFC 8216</td><td>IETF / Apple</td><td>HLS. Defines <code>EXT-X-DATERANGE</code>, discontinuities, and playlist rules.</td></tr>
+        <tr><td>HLS Interstitials</td><td>Apple</td><td>Player-fetched ad assets signalled by a DATERANGE class.</td></tr>
+        <tr><td>ISO/IEC 23009-1</td><td>MPEG</td><td>DASH. Periods, EventStream, <code>emsg</code>.</td></tr>
+        <tr><td>DASH-IF IOP</td><td>DASH-IF</td><td>Interoperability guidance — in practice more prescriptive than the base spec.</td></tr>
+        <tr><td>ISO/IEC 13818-1</td><td>MPEG</td><td>Transport streams. PMT, stream types, PES, PCR.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================= 13 -->
+<section id="glossary">
+  <span class="sec-num">13</span>
+  <h2>Glossary</h2>
+
+  <dl class="gloss">
+    <div><dt>ADS</dt><dd>Ad Decision Server. The system that chooses what plays in an avail.</dd></div>
+    <div><dt>Beacon</dt><dd>A tracking URL fired to record that something happened — usually a 1×1 pixel request.</dd></div>
+    <div><dt>CSAI</dt><dd>Client-Side Ad Insertion. The player fetches and plays the ad.</dd></div>
+    <div><dt>DAI</dt><dd>Dynamic Ad Insertion. The umbrella term; often used to mean SSAI specifically.</dd></div>
+    <div><dt>Discontinuity</dt><dd>A manifest marker telling the player that timing and encoding parameters change at this point.</dd></div>
+    <div><dt>emsg</dt><dd>Event Message Box. Carries events, including SCTE-35, inside a CMAF or DASH segment.</dd></div>
+    <div><dt>GOP</dt><dd>Group of Pictures. The span between keyframes; splices must land on one.</dd></div>
+    <div><dt>IDR frame</dt><dd>A keyframe that fully resets decoding. A splice point must be one.</dd></div>
+    <div><dt>PCR</dt><dd>Program Clock Reference. The transport stream's own clock, which leads presentation time by the decoder buffer delay.</dd></div>
+    <div><dt>PID</dt><dd>Packet Identifier. Identifies an elementary stream inside a transport stream.</dd></div>
+    <div><dt>PMT</dt><dd>Program Map Table. Declares which PIDs carry what, including the SCTE-35 stream.</dd></div>
+    <div><dt>PTS</dt><dd>Presentation Timestamp. When a frame should be shown, on a 90 kHz clock.</dd></div>
+    <div><dt>SSAI</dt><dd>Server-Side Ad Insertion. Ads are spliced into the manifest before the player sees it.</dd></div>
+    <div><dt>Stitcher</dt><dd>The service performing SSAI manifest manipulation.</dd></div>
+    <div><dt>UPID</dt><dd>Unique Program Identifier. Identifies the content a segmentation descriptor refers to.</dd></div>
+    <div><dt>VAST</dt><dd>The XML ad response naming creatives and tracking URLs.</dd></div>
+    <div><dt>VMAP</dt><dd>The XML ad schedule saying where breaks fall in a piece of content.</dd></div>
+    <div><dt>Waterfall</dt><dd>Trying demand sources in priority order until one fills.</dd></div>
+  </dl>
+
+  <footer class="colophon">
+    <p>Written for engineers arriving at streaming advertising from either side — video delivery people
+    meeting ad tech, or ad tech people meeting video. Terminology follows the specifications rather
+    than vendor naming, which is where most confusion in this subject actually comes from.</p>
+  </footer>
+</main>
+</div>
+</div>
+</body>
+</html>

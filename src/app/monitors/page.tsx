@@ -205,9 +205,11 @@ export default function Monitors() {
             that never closes, signalling that disappears, a new fault that was not there on the last poll.
           </p>
         </div>
-        <Link href="/" className="text-sm text-accent hover:underline">
-          ← one-off inspector
-        </Link>
+        <div className="flex shrink-0 flex-col gap-1 text-sm">
+          <Link href="/" className="text-accent hover:underline">← one-off inspector</Link>
+          <Link href="/compare" className="text-accent hover:underline">pipeline comparison →</Link>
+          <a href="/guide" className="text-accent hover:underline">how ad insertion works →</a>
+        </div>
       </header>
 
       {scheduler && !scheduler.running && scheduler.reason && (
