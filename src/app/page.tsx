@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { useState } from "react";
 import type { AnalysisResult, AdBreak, Finding, PeriodSummary, RenditionAnalysis } from "@/lib/analyze";
+import type { SegmentProbe } from "@/lib/segments";
 
 function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
   const t0 = periods[0]?.start ?? 0;
@@ -66,6 +67,70 @@ function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
         anything past 50ms is reported as a finding.
       </div>
     </div>
+  );
+}
+
+function ProbePanel({ probe }: { probe: SegmentProbe }) {
+  return (
+    <section className="mt-6">
+      <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">
+        Inside the segments
+      </h2>
+      <div className="rounded-xl border border-edge bg-panel">
+        <div className="border-b border-edge px-4 py-2 text-[11px] text-muted">
+          {probe.fetched} of {probe.attempted} segments read · {(probe.bytes / 1024 / 1024).toFixed(2)}MB ·{" "}
+          {probe.format} · {probe.signals.length} inband cue{probe.signals.length === 1 ? "" : "s"}
+          {probe.fetchErrors.length > 0 && ` · ${probe.fetchErrors.length} fetch error(s)`}
+        </div>
+        {probe.signals.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted">
+            No SCTE-35 found in the segments that were read — for this stream the manifest is the
+            only carriage.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="text-[11px] uppercase tracking-wide text-muted">
+                <tr className="border-b border-edge/70">
+                  <th className="px-4 py-2 font-medium">Resolved time</th>
+                  <th className="px-3 py-2 font-medium">Event</th>
+                  <th className="px-3 py-2 font-medium">Duration</th>
+                  <th className="px-3 py-2 font-medium">Carriage</th>
+                  <th className="px-3 py-2 font-medium">CRC</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono">
+                {probe.signals.map((s, i) => (
+                  <tr key={i} className="border-b border-edge/40 last:border-0">
+                    <td className="px-4 py-1.5">{s.pdt ? clock(s.pdt) : "unanchored"}</td>
+                    <td className="px-3 py-1.5">{s.eventId ?? "—"}</td>
+                    <td className="px-3 py-1.5">{s.durationSeconds ? `${s.durationSeconds}s` : "—"}</td>
+                    <td className="px-3 py-1.5 text-muted">
+                      {s.tsCarriage === "id3-pes"
+                        ? `ID3 PRIV · PID 0x${s.pid?.toString(16)}`
+                        : s.pid !== undefined
+                          ? `section · PID 0x${s.pid.toString(16)}`
+                          : (s.schemeIdUri ?? "emsg")}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      {s.section ? (
+                        s.section.crcValid ? (
+                          <span className="text-emerald-400">valid</span>
+                        ) : (
+                          <span className="text-amber-300">invalid</span>
+                        )
+                      ) : (
+                        <span className="text-red-300">undecodable</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -334,6 +399,7 @@ export default function Home() {
   const [url, setUrl] = useState("");
   const [paste, setPaste] = useState("");
   const [mode, setMode] = useState<"url" | "paste">("url");
+  const [readSegments, setReadSegments] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -352,7 +418,7 @@ export default function Home() {
           sampleId
             ? { sampleId }
             : mode === "url" || overrideUrl
-              ? { url: overrideUrl ?? url }
+              ? { url: overrideUrl ?? url, probeSegments: readSegments ? 8 : 0 }
               : { text: paste },
         ),
       });
@@ -367,7 +433,11 @@ export default function Home() {
   }
 
   const allFindings = result
-    ? [...result.crossFindings, ...result.renditions.flatMap((r) => r.findings)].sort(
+    ? [
+        ...result.crossFindings,
+        ...result.renditions.flatMap((r) => r.findings),
+        ...(result.probe?.findings ?? []),
+      ].sort(
         (a, b) =>
           ["error", "warning", "info"].indexOf(a.severity) - ["error", "warning", "info"].indexOf(b.severity),
       )
@@ -455,6 +525,22 @@ export default function Home() {
           </div>
         )}
 
+        {mode === "url" && (
+          <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-muted">
+            <input
+              type="checkbox"
+              checked={readSegments}
+              onChange={(e) => setReadSegments(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              Open the segments and read the SCTE-35 inside them, then check it agrees with the
+              manifest. Downloads a few MB and takes a few seconds — HLS only, and not available for
+              the recorded samples.
+            </span>
+          </label>
+        )}
+
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
           <span>Try:</span>
           {SAMPLES.map((s) => (
@@ -514,6 +600,8 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          {result.probe && <ProbePanel probe={result.probe} />}
 
           {allFindings.length > 0 && (
             <section className="mt-6">

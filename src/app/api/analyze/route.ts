@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeText, analyzeUrl, DEFAULT_MAX_VARIANTS } from "@/lib/runner";
 import { getSample, recordedFetcher, sampleEntryUrl } from "@/lib/samples";
+import { probeRendition } from "@/lib/segments";
 
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  let body: { url?: string; text?: string; sampleId?: string; maxVariants?: number };
+  let body: {
+    url?: string;
+    text?: string;
+    sampleId?: string;
+    maxVariants?: number;
+    /** open this many segments and read the SCTE-35 inside them */
+    probeSegments?: number;
+  };
   try {
     body = await req.json();
   } catch {
@@ -31,7 +39,22 @@ export async function POST(req: NextRequest) {
     if (!body.url || !body.url.trim()) {
       return NextResponse.json({ error: "Provide a manifest URL or paste a manifest" }, { status: 400 });
     }
-    return NextResponse.json(await analyzeUrl(body.url.trim(), maxVariants));
+    const result = await analyzeUrl(body.url.trim(), maxVariants);
+
+    // Reading segments costs megabytes and seconds, so it is opt-in.
+    const wanted = Math.min(Math.max(body.probeSegments ?? 0, 0), 12);
+    if (wanted > 0 && result.renditions[0]?.protocol === "hls") {
+      try {
+        const probe = await probeRendition(result.renditions[0], { maxSegments: wanted });
+        return NextResponse.json({ ...result, probe });
+      } catch (e) {
+        return NextResponse.json({
+          ...result,
+          probeError: e instanceof Error ? e.message : "could not read segments",
+        });
+      }
+    }
+    return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Analysis failed" }, { status: 400 });
   }

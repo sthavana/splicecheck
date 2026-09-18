@@ -10,6 +10,7 @@
 import { readFile } from "node:fs/promises";
 import { analyzeText, analyzeUrl, type RunResult } from "./lib/runner";
 import { comparePipeline } from "./lib/pipeline";
+import { probeRendition, type SegmentProbe } from "./lib/segments";
 import type { Finding } from "./lib/analyze";
 
 const useColour =
@@ -34,6 +35,8 @@ interface Options {
   strict: boolean;
   quiet: boolean;
   variants?: number;
+  /** number of segments to open, or 0 to stay at the manifest layer */
+  segments: number;
 }
 
 function usage(): never {
@@ -48,6 +51,8 @@ Options
   --strict           exit non-zero on warnings as well as errors
   --quiet            print findings only, no summary detail
   --variants <n>     maximum HLS renditions to fetch (default 6)
+  --segments [n]     open n segments and read the SCTE-35 inside them,
+                     then check it agrees with the manifest (default 8)
   -h, --help         this message
 
 Exit codes
@@ -59,7 +64,7 @@ Exit codes
 }
 
 function parseArgs(argv: string[]): { cmd: string; targets: string[]; opts: Options } {
-  const opts: Options = { json: false, strict: false, quiet: false };
+  const opts: Options = { json: false, strict: false, quiet: false, segments: 0 };
   const targets: string[] = [];
   let cmd = "analyse";
 
@@ -70,6 +75,10 @@ function parseArgs(argv: string[]): { cmd: string; targets: string[]; opts: Opti
     else if (a === "--strict") opts.strict = true;
     else if (a === "--quiet") opts.quiet = true;
     else if (a === "--variants") opts.variants = Number(argv[++i]);
+    else if (a === "--segments") {
+      const next = argv[i + 1];
+      opts.segments = next && /^\d+$/.test(next) ? Number(argv[++i]) : 8;
+    }
     else if (a === "compare" && targets.length === 0) cmd = "compare";
     else if (a.startsWith("-")) {
       process.stderr.write(`unknown option ${a}\n`);
@@ -89,14 +98,31 @@ async function load(target: string, opts: Options): Promise<RunResult> {
 
 function printFindings(findings: Finding[], quiet: boolean) {
   const order = { error: 0, warning: 1, info: 2 } as const;
-  const sorted = [...findings].sort((a, b) => order[a.severity] - order[b.severity]);
-  for (const f of sorted) {
+  // The same fault in every rendition is one fault. Show it once and say how
+  // many times it occurred, or a stream with four renditions buries its own
+  // errors under repeats.
+  const groups = new Map<string, { finding: Finding; count: number }>();
+  for (const f of findings) {
+    const key = `${f.severity}|${f.code}|${f.title}`;
+    const g = groups.get(key);
+    if (g) g.count++;
+    else groups.set(key, { finding: f, count: 1 });
+  }
+
+  const sorted = [...groups.values()].sort(
+    (a, b) => order[a.finding.severity] - order[b.finding.severity],
+  );
+  for (const { finding: f, count } of sorted) {
     const s = SEV[f.severity];
-    const where = [f.rendition, f.lineNumber !== undefined ? `line ${f.lineNumber}` : undefined]
+    const where = [
+      f.rendition,
+      count === 1 && f.lineNumber !== undefined ? `line ${f.lineNumber}` : undefined,
+    ]
       .filter(Boolean)
       .join(" · ");
+    const times = count > 1 ? c.dim(` ×${count}`) : "";
     process.stdout.write(
-      `  ${s.paint(s.mark)} ${f.title} ${c.dim(f.code)}${where ? " " + c.dim(where) : ""}\n`,
+      `  ${s.paint(s.mark)} ${f.title} ${c.dim(f.code)}${where ? " " + c.dim(where) : ""}${times}\n`,
     );
     if (!quiet) process.stdout.write(`    ${c.dim(wrap(f.detail, 76, "    "))}\n`);
   }
@@ -126,10 +152,38 @@ function verdictLine(verdict: string, errors: number, warnings: number, infos: n
   return `${label}  ${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"}, ${infos} info`;
 }
 
+function printProbe(probe: SegmentProbe) {
+  process.stdout.write(
+    c.dim(
+      `  segments: ${probe.fetched}/${probe.attempted} read · ${(probe.bytes / 1024 / 1024).toFixed(2)}MB · ${probe.format} · ` +
+        `${probe.signals.length} inband cue${probe.signals.length === 1 ? "" : "s"}\n`,
+    ),
+  );
+  for (const s of probe.signals) {
+    const where =
+      s.tsCarriage === "id3-pes"
+        ? `ID3 PRIV on PID 0x${s.pid?.toString(16)}`
+        : s.pid !== undefined
+          ? `PID 0x${s.pid.toString(16)}`
+          : (s.schemeIdUri ?? "emsg");
+    process.stdout.write(
+      c.dim(
+        `    ${s.pdt ? new Date(s.pdt).toISOString() : "unanchored"}  event ${s.eventId ?? "?"}  ` +
+          `${s.durationSeconds ?? "?"}s  ${where}${s.section && !s.section.crcValid ? "  CRC invalid" : ""}\n`,
+      ),
+    );
+  }
+  process.stdout.write("\n");
+}
+
 async function runAnalyse(target: string, opts: Options): Promise<number> {
   const r = await load(target, opts);
+  let probe: SegmentProbe | undefined;
+  if (opts.segments > 0 && r.renditions[0]?.protocol === "hls") {
+    probe = await probeRendition(r.renditions[0], { maxSegments: opts.segments });
+  }
   if (opts.json) {
-    process.stdout.write(JSON.stringify(r, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ ...r, probe }, null, 2) + "\n");
   } else {
     const first = r.renditions[0];
     process.stdout.write(`\n${c.bold(r.sourceUri)}\n`);
@@ -140,7 +194,12 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
           `${Math.round(first?.stats.windowDuration ?? 0)}s window · ${(first?.stats.adPercent ?? 0).toFixed(1)}% ad load\n\n`,
       ),
     );
-    const all = [...r.crossFindings, ...r.renditions.flatMap((x) => x.findings)];
+    if (probe) printProbe(probe);
+    const all = [
+      ...r.crossFindings,
+      ...r.renditions.flatMap((x) => x.findings),
+      ...(probe?.findings ?? []),
+    ];
     if (all.length === 0) process.stdout.write(c.green("  nothing to report\n\n"));
     else {
       printFindings(all, opts.quiet);
@@ -150,8 +209,10 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
       `  ${verdictLine(r.summary.verdict, r.summary.errors, r.summary.warnings, r.summary.infos)}\n\n`,
     );
   }
-  if (r.summary.errors > 0) return 1;
-  if (opts.strict && r.summary.warnings > 0) return 1;
+  const probeErrors = probe?.findings.filter((f) => f.severity === "error").length ?? 0;
+  const probeWarnings = probe?.findings.filter((f) => f.severity === "warning").length ?? 0;
+  if (r.summary.errors + probeErrors > 0) return 1;
+  if (opts.strict && r.summary.warnings + probeWarnings > 0) return 1;
   return 0;
 }
 

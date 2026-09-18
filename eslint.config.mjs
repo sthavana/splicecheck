@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Bundled output, not source.
     "dist/**",
+    // Media fixtures; stream.ts is a transport stream, not TypeScript.
+    "fixtures/**",
   ]),
 ]);
 

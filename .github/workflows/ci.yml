@@ -43,6 +43,14 @@ jobs:
       - name: CLI passes a well-formed manifest
         run: ./dist/cli.mjs fixtures/samples/multiperiod-dash/manifest.mpd --quiet
 
+      # The segment fixtures are generated; regenerating them must reproduce
+      # exactly what is committed, or the parsers and the generator have drifted.
+      - name: Segment fixtures are reproducible
+        run: |
+          npx tsx scripts/make-segment-fixtures.ts
+          npx tsx scripts/make-multiperiod-sample.ts
+          git diff --exit-code -- fixtures/
+
       - name: CLI reports the SSAI comparison
         run: |
           if ./dist/cli.mjs compare \

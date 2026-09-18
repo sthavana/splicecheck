@@ -56,14 +56,24 @@ npm install && npm run dev      # then click a sample
 **On a live HLS feed**
 
 - The `splice_insert` payloads decode correctly — event ids and break durations
-  match the manifest exactly — but their **CRC-32 does not validate**. The
-  packager rewrote the section without recomputing the CRC. Strict ad
-  decisioning rejects sections with a bad CRC, so these breaks can be dropped
-  while looking perfect in the manifest.
+  match the manifest exactly — but their **CRC-32 does not validate**. Strict
+  ad decisioning rejects sections with a bad CRC, so these breaks can be
+  dropped while looking perfect in the manifest.
+  <br>I first assumed the packager had rewritten the section without
+  recomputing the CRC. Reading the segments disproved that: the cue carried
+  inband in the transport stream has the *same* invalid CRC, so the fault is
+  already present when the signal leaves the encoder. That conclusion is not
+  reachable from the manifest alone.
 - Every break sets `splice_immediate_flag`, so the ad decision server is told to
   switch now rather than at a known PTS, with no time to pre-fetch creatives.
 - All four renditions splice at identical points, so cross-rendition comparison
   stays silent — which is the result you want to be able to trust.
+
+- Opening the segments finds the cue carried as an **ID3 `PRIV` frame inside a
+  metadata PES**, owner `urn:scte:scte35:2013:bin@` — not on a `stream_type`
+  0x86 PID, which is what a scanner looking only for the broadcast form would
+  check. Anchored against the segment's first presentation timestamp, all five
+  avails resolve to **exactly** the instant the manifest claims: 0.000s drift.
 
 **On the same service's DASH output**
 
@@ -84,6 +94,49 @@ npm install && npm run dev      # then click a sample
 - Avails pair start to end on `segmentation_event_id` and land on their
   signalled duration; every boundary meets to the tick, so nothing is reported
   about the timeline.
+
+## Below the manifest
+
+A manifest is a transcription. An encoder emits SCTE-35 into the transport
+stream or into an `emsg` box, and a packager then writes a tag describing it.
+Those two can disagree, and nothing in a manifest-only view can see it.
+
+```bash
+./dist/cli.mjs <url> --segments 8
+```
+
+opens the segments, reads the cues actually carried in them, and checks they
+agree with the manifest:
+
+```
+  segments: 6/6 read · 0.86MB · mpeg-ts · 3 inband cues
+    2026-09-18T13:41:57.120Z  event 14796122  38.4s  ID3 PRIV on PID 0x23  CRC invalid
+    2026-09-18T13:43:58.080Z  event 14796123  38.4s  ID3 PRIV on PID 0x23  CRC invalid
+```
+
+**Carriages understood**
+
+| Where the cue lives | |
+| --- | --- |
+| `emsg` box, versions 0 and 1 | DASH and CMAF segments |
+| ID3 `PRIV` frame in a metadata PES (`stream_type` 0x15) | how HLS transport streams usually carry it |
+| Section on a `stream_type` 0x86 PID | the broadcast form, straight out of the encoder |
+
+**What it can then say**
+
+| Code | What it catches |
+| --- | --- |
+| `INBAND_MANIFEST_TIME_MISMATCH` | The packager transcribed the cue to a different instant than the encoder signalled — systems acting on the manifest and systems acting on the stream splice at different points |
+| `INBAND_SIGNAL_NOT_IN_MANIFEST` | The encoder signalled an avail the packager never wrote a tag for. Players and SSAI read the manifest, so the inventory is simply lost |
+| `INBAND_MANIFEST_EVENT_ID_MISMATCH` | The same avail counted as two different events in reporting |
+| `INBAND_SCTE35_CRC_INVALID` | A bad CRC *at the encoder*, which distinguishes an upstream fault from one the packager introduced |
+| `NO_INBAND_SCTE35` | The manifest is the only carriage, so there is nothing to check it against |
+
+Getting the timing right is the whole exercise. Program date-time names a
+segment's first **presentation** timestamp; the PCR leads it by the decoder
+buffer delay. Anchoring on the PCR put every cue a constant 0.125s late against
+a stream that in fact agrees exactly — a difference small enough to look like a
+real defect and to be believed.
 
 ## The harder half: not crying wolf
 
@@ -254,6 +307,7 @@ Takes a URL or a path, so it works against a live origin or a captured manifest.
 | `--strict` | exit non-zero on warnings as well as errors |
 | `--quiet` | findings only, without the explanation of each |
 | `--variants <n>` | maximum HLS renditions to fetch |
+| `--segments [n]` | open n segments and read the SCTE-35 inside them |
 
 Exit codes make it usable as a gate: **0** no errors, **1** problems found,
 **2** could not analyse the input. CI runs it against the defect fixtures on
@@ -285,6 +339,9 @@ src/lib/runner.ts      one analysis path, with the fetcher injected
 src/lib/pipeline.ts    source vs stitched-output comparison
 src/lib/monitor.ts     polling, transition diffing, alert delivery
 src/lib/store.ts       SQLite state
+src/lib/mp4.ts         ISO BMFF box walking and emsg extraction
+src/lib/ts.ts          MPEG-TS: PAT, PMT, cue sections, ID3-in-PES
+src/lib/segments.ts    reads segments and checks them against the manifest
 src/cli.ts             terminal interface over the same analysis
 ```
 
@@ -299,8 +356,9 @@ would need a hosted database and a cron route instead.
 
 ## Not done yet
 
-- Inband `emsg` events (DASH) and HLS interstitials
-  (`EXT-X-DATERANGE` with `CLASS="com.apple.hls.interstitial"`)
+- HLS interstitials (`EXT-X-DATERANGE` with `CLASS="com.apple.hls.interstitial"`)
+- Reading segments for DASH as well as HLS — the parsers handle `emsg`, but
+  resolving a `SegmentTemplate` to segment URLs is not wired up yet
 - Per-creative breakdown inside a filled avail — which creatives ran, and
   whether the pod was assembled as the ad server intended
 - Running the pipeline comparison continuously, so fill rate becomes a tracked
