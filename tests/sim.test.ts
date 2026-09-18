@@ -224,3 +224,65 @@ test("a window that opens mid-break is information, not an error", () => {
   const orphan = a.renditions.flatMap((r) => r.findings).find((f) => f.code === "ORPHAN_CUE_IN");
   if (orphan) assert.equal(orphan.severity, "info", "a sliding window is not a fault");
 });
+
+/* ------------------------------------------------------ DASH and CSAI ---- */
+
+function dashCodes(cfg: Partial<SimConfig>, side: "origin" | "ssai"): string[] {
+  const a = run({ protocol: "dash", ...cfg }).analysis[side];
+  if ("error" in a) throw new Error(a.error);
+  return a.renditions.flatMap((r) => r.findings).concat(a.crossFindings).map((f) => f.code);
+}
+
+test("a clean DASH run raises nothing on either side", () => {
+  assert.deepEqual(dashCodes({}, "origin"), []);
+  assert.deepEqual(dashCodes({}, "ssai"), []);
+});
+
+test("the DASH pipeline is single-period in and multi-period out", () => {
+  const r = run({ protocol: "dash" });
+  const src = r.analysis.origin;
+  const out = r.analysis.ssai;
+  if ("error" in src || "error" in out) throw new Error("analysis failed");
+  assert.equal(src.meta.mpd?.periodCount, 1, "the packager describes the avail with an Event");
+  assert.ok((out.meta.mpd?.periodCount ?? 0) > 1, "the ad service splits the presentation");
+});
+
+test("DASH faults land on the manifest that actually carries them", () => {
+  // Continuity and gaps are properties of the split output, not of the source.
+  assert.ok(dashCodes({ faults: { noPeriodContinuity: true } }, "ssai").includes("NO_PERIOD_CONTINUITY_SIGNAL"));
+  assert.ok(!dashCodes({ faults: { noPeriodContinuity: true } }, "origin").includes("NO_PERIOD_CONTINUITY_SIGNAL"));
+  assert.ok(dashCodes({ faults: { periodGap: true } }, "ssai").includes("PERIOD_TIMELINE_GAP"));
+  // A missing presentationTimeOffset is wrong wherever it appears.
+  assert.ok(dashCodes({ faults: { dropPresentationTimeOffset: true } }, "origin").includes("PTO_MISMATCH"));
+});
+
+test("the SCTE-35 in a DASH EventStream is the same section the encoder emitted", () => {
+  const r = run({ protocol: "dash" });
+  const payload = r.timeline.signals[0].base64;
+  const mpd = r.stages.find((s) => s.id === "packager")!.text!;
+  assert.ok(mpd.includes(`<scte35:Binary>${payload}</scte35:Binary>`));
+  assert.equal(parseSpliceInfoSection(payload).crcValid, true);
+});
+
+test("client-side insertion leaves the manifest alone", () => {
+  const r = run({ adMode: "csai" });
+  assert.ok(r.csai, "a client-side run models the player");
+  assert.equal(r.csai!.manifestUnchanged, true);
+  // Nothing was stitched, so there is no stitched manifest to compare against.
+  assert.ok("error" in r.analysis.comparison);
+  assert.ok(!r.stages.find((s) => s.id === "origin")!.text!.includes("ads/"));
+});
+
+test("each client-side failure produces its own outcome", () => {
+  assert.equal(run({ adMode: "csai" }).csai!.outcome, "filled");
+  assert.equal(run({ adMode: "csai", faults: { adBlocked: true } }).csai!.outcome, "empty");
+  assert.equal(run({ adMode: "csai", faults: { adServerTimeout: true } }).csai!.outcome, "empty");
+  assert.equal(run({ adMode: "csai", faults: { creativeFailsToLoad: true } }).csai!.outcome, "under-filled");
+});
+
+test("a blocked client-side ad fires no beacons at all", () => {
+  const blocked = run({ adMode: "csai", faults: { adBlocked: true } }).csai!;
+  assert.equal(blocked.events.filter((e) => e.kind === "beacon").length, 0);
+  // Server-side, the same avail still reports, which is the trade being shown.
+  assert.ok(run({}).ssai.beacons.length > 0);
+});

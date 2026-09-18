@@ -31,6 +31,8 @@ function sanitise(input: Partial<SimConfig>): SimConfig {
     )
       ? input.stitchMode!
       : "fill",
+    protocol: input.protocol === "dash" ? "dash" : "hls",
+    adMode: input.adMode === "csai" ? "csai" : "ssai",
     faults: typeof input.faults === "object" && input.faults ? input.faults : {},
   };
 }
@@ -55,6 +57,7 @@ export async function POST(req: NextRequest) {
       avails: r.timeline.avails,
       segmentCount: r.timeline.segments.length,
       ssai: { avails: r.ssai.avails, beacons: r.ssai.beacons.slice(0, 40), uri: r.ssai.uri },
+      csai: r.csai,
       analysis: r.analysis,
     });
   } catch (e) {

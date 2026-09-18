@@ -14,6 +14,8 @@ import { writeMasterPlaylist, writeMediaPlaylist, type MarkerStyle, type Package
 import { serveMediaPlaylist, type OriginFaults } from "./origin";
 import { stitch, type SsaiSpec, type StitchMode, type StitchResult } from "./ssai";
 import { buildTimeline, type ChannelSpec, type SignalStyle, type Timeline, type TimelineFaults } from "./timeline";
+import { writeMpd, type DashSpec } from "./dashPackager";
+import { runCsai, type CsaiResult, type CsaiSpec } from "./csai";
 
 export interface SimConfig {
   segmentSeconds: number;
@@ -25,7 +27,29 @@ export interface SimConfig {
   markerStyle: MarkerStyle;
   windowSegments: number;
   stitchMode: StitchMode;
-  faults: TimelineFaults & PackagerFaults & OriginFaults & { dropDiscontinuity?: boolean };
+  /** Which protocol the packager emits. */
+  protocol: "hls" | "dash";
+  /** Where the ad is spliced: in the manifest, or in the player. */
+  adMode: "ssai" | "csai";
+  dash?: Partial<DashSpec>;
+  csai?: CsaiSpec;
+  faults: TimelineFaults &
+    PackagerFaults &
+    OriginFaults & {
+      dropDiscontinuity?: boolean;
+      /** DASH: leave a hole between Periods. */
+      periodGap?: boolean;
+      /** DASH: omit @presentationTimeOffset. */
+      dropPresentationTimeOffset?: boolean;
+      /** DASH: do not declare continuity across the splices. */
+      noPeriodContinuity?: boolean;
+      /** CSAI: the ad server does not answer in time. */
+      adServerTimeout?: boolean;
+      /** CSAI: the request never leaves the device. */
+      adBlocked?: boolean;
+      /** CSAI: the creative CDN does not deliver. */
+      creativeFailsToLoad?: boolean;
+    };
 }
 
 export const DEFAULT_CONFIG: SimConfig = {
@@ -39,6 +63,8 @@ export const DEFAULT_CONFIG: SimConfig = {
   markerStyle: "both",
   windowSegments: 20,
   stitchMode: "fill",
+  protocol: "hls",
+  adMode: "ssai",
   faults: {},
 };
 
@@ -62,6 +88,9 @@ export interface SimResult {
   master: string;
   origin: { text: string; uri: string; from: number; count: number; behindSec: number };
   ssai: StitchResult;
+  csai?: CsaiResult;
+  /** Set when the packager emitted DASH. */
+  mpd?: { text: string; uri: string };
   /** The project's own verdict on each side, and on the pair. */
   analysis: {
     origin: RunResult | { error: string };
@@ -103,6 +132,16 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
   const packaged = writeMediaPlaylist(timeline, pkg, { endList: true, uri: "packaged.m3u8" });
   const master = writeMasterPlaylist(pkg);
 
+  const dashSpec: DashSpec = {
+    multiPeriod: config.adMode === "ssai",
+    periodContinuity: !f.noPeriodContinuity,
+    emitEventStream: true,
+    timeShiftBufferDepth: config.windowSegments * config.segmentSeconds,
+    minimumUpdatePeriod: config.segmentSeconds,
+    faults: { periodGap: f.periodGap, dropPresentationTimeOffset: f.dropPresentationTimeOffset },
+    ...config.dash,
+  };
+
   // Put the live edge just past the last avail, so the window a client would
   // actually be watching contains a break rather than quiet programme.
   const lastAvail = timeline.avails[timeline.avails.length - 1];
@@ -138,6 +177,32 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
   };
   const ssaiOut = stitch(timeline, pkg, ssaiSpec, { from, count });
 
+  // In DASH the pipeline is single-period in, multi-period out: the packager
+  // describes the avail with an Event, and the ad service splits the
+  // presentation at it. Both sides are needed for the comparison to mean
+  // anything, so both are written.
+  const sourceMpd =
+    config.protocol === "dash"
+      ? writeMpd(timeline, { ...dashSpec, multiPeriod: false }, { from, count, uri: "source.mpd" })
+      : undefined;
+  const stitchedMpd =
+    config.protocol === "dash" && config.adMode === "ssai"
+      ? writeMpd(timeline, { ...dashSpec, multiPeriod: true }, { from, count, uri: "stitched.mpd" })
+      : undefined;
+  const mpd = stitchedMpd ?? sourceMpd;
+
+  // Client-side insertion leaves the manifest alone, so there is no stitched
+  // output to analyse — the whole event sequence happens in the player.
+  const csai =
+    config.adMode === "csai"
+      ? runCsai(timeline, {
+          adServerTimeout: f.adServerTimeout,
+          blocked: f.adBlocked,
+          creativeFailsToLoad: f.creativeFailsToLoad,
+          ...config.csai,
+        })
+      : undefined;
+
   // The comparison needs both sides over the same window, or every avail
   // outside the overlap reads as missing.
   const sourceWindow = writeMediaPlaylist(timeline, pkg, { from, count, uri: "source.m3u8" });
@@ -150,11 +215,24 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
     }
   };
 
-  const originAnalysis = safe(() => analyzeText(origin.text, "sim://origin/index.m3u8"));
-  const ssaiAnalysis = safe(() => analyzeText(ssaiOut.text, "sim://ssai/index.m3u8"));
-  const sourceAnalysis = safe(() => analyzeText(sourceWindow.text, "sim://packager/index.m3u8"));
-  const comparison =
-    "error" in sourceAnalysis
+  const originAnalysis = safe(() =>
+    sourceMpd
+      ? analyzeText(sourceMpd.text, "sim://origin/manifest.mpd")
+      : analyzeText(origin.text, "sim://origin/index.m3u8"),
+  );
+  const ssaiAnalysis = safe(() =>
+    stitchedMpd
+      ? analyzeText(stitchedMpd.text, "sim://ssai/stitched.mpd")
+      : analyzeText(ssaiOut.text, "sim://ssai/index.m3u8"),
+  );
+  const sourceAnalysis = safe(() =>
+    sourceMpd
+      ? analyzeText(sourceMpd.text, "sim://packager/source.mpd")
+      : analyzeText(sourceWindow.text, "sim://packager/index.m3u8"),
+  );
+  const comparison = config.adMode === "csai"
+    ? { error: "Client-side insertion does not rewrite the manifest, so there is no stitched output to compare." }
+    : "error" in sourceAnalysis
       ? sourceAnalysis
       : "error" in ssaiAnalysis
         ? ssaiAnalysis
@@ -179,11 +257,15 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
       id: "packager",
       title: "Packaging",
       note:
-        `Transcribed to ${config.markerStyle === "both" ? "DATERANGE and CUE-OUT" : config.markerStyle}` +
+        (config.protocol === "dash"
+          ? `${config.adMode === "ssai" ? "Multi-period" : "Single-period"} MPD with an EventStream` +
+            `${f.noPeriodContinuity ? ", no continuity declared" : ""}` +
+            `${f.periodGap ? ", with a gap between Periods" : ""}.`
+          : `Transcribed to ${config.markerStyle === "both" ? "DATERANGE and CUE-OUT" : config.markerStyle}` +
         `${f.dropCueIn ? ", omitting the CUE-IN" : ""}` +
-        `${f.noDiscontinuity ? ", without discontinuities" : ""}.`,
-      text: packaged.text,
-      uri: packaged.uri,
+            `${f.noDiscontinuity ? ", without discontinuities" : ""}.`),
+      text: sourceMpd ? sourceMpd.text : packaged.text,
+      uri: sourceMpd ? sourceMpd.uri : packaged.uri,
     },
     {
       id: "origin",
@@ -192,21 +274,33 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
         `${origin.count}-segment window at sequence ${origin.from}` +
         `${f.stalled ? `, stalled ${origin.behindSec.toFixed(0)}s behind live` : ""}` +
         `${f.shortWindow ? ", DVR shortened" : ""}.`,
-      text: origin.text,
-      uri: origin.uri,
+      text: sourceMpd ? sourceMpd.text : origin.text,
+      uri: sourceMpd ? sourceMpd.uri : origin.uri,
     },
-    {
-      id: "ssai",
-      title: "SSAI",
-      note: describeStitch(ssaiOut, config.stitchMode),
-      text: ssaiOut.text,
-      uri: ssaiOut.uri,
-    },
+    config.adMode === "csai"
+      ? {
+          id: "ssai",
+          title: "CSAI",
+          note: describeCsai(csai),
+          text: csai?.vast,
+          uri: "VAST response",
+        }
+      : {
+          id: "ssai",
+          title: "SSAI",
+              note: stitchedMpd
+            ? `Presentation split into ${stitchedMpd.periods.length} Periods at the avail boundaries.`
+            : describeStitch(ssaiOut, config.stitchMode),
+          text: stitchedMpd ? stitchedMpd.text : ssaiOut.text,
+          uri: stitchedMpd ? stitchedMpd.uri : ssaiOut.uri,
+        },
   ];
 
   return {
     config,
     timeline,
+    csai,
+    mpd: mpd ? { text: mpd.text, uri: mpd.uri } : undefined,
     stages,
     master,
     origin: { text: origin.text, uri: origin.uri, from: origin.from, count: origin.count, behindSec: origin.behindSec },
@@ -223,4 +317,11 @@ function describeStitch(r: StitchResult, mode: StitchMode): string {
   const delta = a.deliveredSec - a.signalledSec;
   const word = Math.abs(delta) < 0.5 ? "exactly filling" : delta < 0 ? `${Math.abs(delta).toFixed(0)}s short of` : `${delta.toFixed(0)}s over`;
   return `${r.avails.reduce((n, x) => n + x.creatives.length, 0)} creatives stitched, ${word} the signalled avail.`;
+}
+
+function describeCsai(c: CsaiResult | undefined): string {
+  if (!c) return "";
+  if (c.outcome === "empty") return "No ad reached the screen; the programme played under the avail.";
+  const pct = Math.round((c.deliveredSec / Math.max(1, c.signalledSec)) * 100);
+  return `${c.deliveredSec}s of ${c.signalledSec}s played in the player (${pct}%), manifest untouched.`;
 }
