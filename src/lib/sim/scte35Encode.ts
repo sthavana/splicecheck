@@ -23,11 +23,9 @@ class BitWriter {
   write(n: number, value: number) {
     if (n > 40) throw new Error(`field of ${n} bits is wider than this writer supports`);
     if (value < 0) throw new Error("negative value in a bit field");
-    let v = Math.floor(value);
+    const v = Math.floor(value);
     for (let i = n - 1; i >= 0; i--) {
-      const p = Math.pow(2, i);
-      const bit = Math.floor(v / p) % 2;
-      this.bits.push(bit);
+      this.bits.push(Math.floor(v / Math.pow(2, i)) % 2);
     }
   }
 

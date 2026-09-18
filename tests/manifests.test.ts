@@ -331,3 +331,71 @@ test("HLS: an interstitial DATERANGE is not counted as a spliced avail", () => {
   assert.equal(r.renditions[0].breaks.length, 0);
   assert.ok(r.renditions[0].findings.some((f) => f.code === "INTERSTITIAL_SIGNALLING"));
 });
+
+/* ------------------------------------------------- break left open live --
+ * A break open at the live edge is normally just a break on air, so this rule
+ * turns on the one thing that separates the two cases: the duration the break
+ * declared for itself. Both halves are tested, because a rule that fires on a
+ * healthy stream is worse than no rule.
+ */
+
+const ON_AIR = `#EXTM3U
+#EXT-X-VERSION:6
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:10
+#EXT-X-PROGRAM-DATE-TIME:2026-01-01T00:00:00.000Z
+#EXTINF:6.000,
+a.ts
+#EXT-X-CUE-OUT:60.000
+#EXTINF:6.000,
+b.ts
+#EXTINF:6.000,
+c.ts
+`;
+
+const more = (n: number, tag: string) =>
+  Array.from({ length: n }, (_, i) => `#EXTINF:6.000,\n${tag}${i}.ts`).join("\n") + "\n";
+
+function severityCodes(text: string): string[] {
+  const r = analyzeText(text, "live.m3u8");
+  return r.renditions.flatMap((x) => x.findings).map((f) => `${f.severity}:${f.code}`);
+}
+
+test("a break on air well inside its declared duration is only information", () => {
+  // 12s elapsed against a 60s declaration: the CUE-IN is not due yet.
+  assert.ok(severityCodes(ON_AIR).includes("info:BREAK_IN_PROGRESS"));
+  assert.ok(!severityCodes(ON_AIR).some((c) => c.includes("BREAK_OVERRUN_UNCLOSED")));
+});
+
+test("a break just past its declared duration stays inside the margin", () => {
+  // 66s against 60s, with a 6s target duration: one segment late is not a fault.
+  const edge = ON_AIR + more(9, "e");
+  assert.ok(severityCodes(edge).includes("info:BREAK_IN_PROGRESS"));
+  assert.ok(!severityCodes(edge).some((c) => c.includes("BREAK_OVERRUN_UNCLOSED")));
+});
+
+test("a break far past its declared duration and still open is an error", () => {
+  // 90s against 60s. The packager has had five segments to write the CUE-IN.
+  const over = ON_AIR + more(13, "d");
+  assert.ok(severityCodes(over).includes("error:BREAK_OVERRUN_UNCLOSED"));
+  assert.ok(!severityCodes(over).includes("info:BREAK_IN_PROGRESS"), "one verdict, not both");
+});
+
+test("a break with no declared duration is never judged on length", () => {
+  // Nothing says how long it should be, so running long says nothing either.
+  const noDuration = ON_AIR.replace("#EXT-X-CUE-OUT:60.000", "#EXT-X-CUE-OUT") + more(20, "f");
+  assert.ok(!severityCodes(noDuration).some((c) => c.includes("BREAK_OVERRUN_UNCLOSED")));
+});
+
+test("a window that opens part-way through a break is not judged on length", () => {
+  // The break's real extent is off the front of the window, so elapsed time
+  // here is a property of the window, not of the break.
+  const clipped = `#EXTM3U
+#EXT-X-VERSION:6
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:40
+#EXT-X-CUE-OUT:30.000
+#EXT-X-PROGRAM-DATE-TIME:2026-01-01T00:04:00.000Z
+${more(15, "g")}`;
+  assert.ok(!severityCodes(clipped).some((c) => c.includes("BREAK_OVERRUN_UNCLOSED")));
+});

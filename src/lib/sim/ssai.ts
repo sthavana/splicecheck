@@ -129,15 +129,15 @@ export function stitch(
         if (opening) markers.push(`#EXT-X-CUE-OUT:${fmt(opening.durationSec)}`);
         if (closing) markers.push("#EXT-X-CUE-IN");
       }
-      if (avail && ssai.mode === "passthrough") {
-        stitched.find((s) => s.availId === avail.id) ??
-          stitched.push({
-            availId: avail.id,
-            signalledSec: avail.durationSec,
-            deliveredSec: avail.snappedDurationSec,
-            creatives: [],
-            mode: ssai.mode,
-          });
+      // The avail spans several segments, so record it once.
+      if (avail && ssai.mode === "passthrough" && !stitched.some((x) => x.availId === avail.id)) {
+        stitched.push({
+          availId: avail.id,
+          signalledSec: avail.durationSec,
+          deliveredSec: avail.snappedDurationSec,
+          creatives: [],
+          mode: ssai.mode,
+        });
       }
       out.push({
         uri: seg.uri,

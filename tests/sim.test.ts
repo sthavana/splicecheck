@@ -286,3 +286,8 @@ test("a blocked client-side ad fires no beacons at all", () => {
   // Server-side, the same avail still reports, which is the trade being shown.
   assert.ok(run({}).ssai.beacons.length > 0);
 });
+
+test("a packager that drops the CUE-IN is caught, and only then", () => {
+  assert.ok(originCodes({ faults: { dropCueIn: true } }).includes("BREAK_OVERRUN_UNCLOSED"));
+  assert.ok(!originCodes({}).includes("BREAK_OVERRUN_UNCLOSED"));
+});

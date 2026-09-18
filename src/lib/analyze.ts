@@ -553,13 +553,34 @@ export function analyzeRendition(
     // --- per-break rules -------------------------------------------------
     if (!inMarker) {
       if (live) {
-        add(
-          "info",
-          "BREAK_IN_PROGRESS",
-          `Break ${breakIndex} is still open at the live edge`,
-          `The CUE-OUT at line ${outM.lineNumber} has no matching CUE-IN yet. On a live playlist this is normal if the break is currently on air; re-run in a few seconds and confirm it closes.`,
-          { lineNumber: outM.lineNumber, breakIndex, atTime: outM.startTime },
-        );
+        // A break open at the live edge is usually just a break on air. What
+        // separates the two cases is the duration the break declared for
+        // itself: once the window has run past that by more than a couple of
+        // target durations, the packager has had every opportunity to write the
+        // CUE-IN and has not. The margin is what keeps this off healthy streams
+        // — a break is expected to still be open right up to its own end.
+        const overrunMargin = Math.max(EPS, (playlist.targetDuration ?? 6) * 2);
+        const overrun = signalled !== undefined && !clipped ? actual - signalled : undefined;
+
+        if (overrun !== undefined && overrun > overrunMargin) {
+          add(
+            "error",
+            "BREAK_OVERRUN_UNCLOSED",
+            `Break ${breakIndex} has run ${fmt(overrun)}s past the ${fmt(signalled)}s it signalled and is still open`,
+            `The CUE-OUT at line ${outM.lineNumber} declares ${fmt(signalled)}s (${signalledSource}), but ${fmt(actual)}s of segments have been published since and no CUE-IN has appeared. This is not a break still on air: the window is ${fmt(overrun)}s past the point the break said it would end. Players that entered the avail are still in ad mode, and an SSAI service is still substituting over programme content. The return signal was lost between the encoder and the packager, or the packager dropped it.${
+              b.autoReturn ? " The SCTE-35 sets auto_return, so receivers acting on the stream will have returned on their own — but HLS players follow the manifest, and this manifest has not brought them back." : ""
+            }`,
+            { lineNumber: outM.lineNumber, breakIndex, atTime: outM.startTime },
+          );
+        } else {
+          add(
+            "info",
+            "BREAK_IN_PROGRESS",
+            `Break ${breakIndex} is still open at the live edge`,
+            `The CUE-OUT at line ${outM.lineNumber} has no matching CUE-IN yet. On a live playlist this is normal if the break is currently on air; re-run in a few seconds and confirm it closes.`,
+            { lineNumber: outM.lineNumber, breakIndex, atTime: outM.startTime },
+          );
+        }
       } else {
         add(
           "error",

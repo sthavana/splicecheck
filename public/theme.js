@@ -16,7 +16,7 @@
   try {
     var stored = localStorage.getItem(KEY);
     if (stored === "light" || stored === "dark") root.setAttribute("data-theme", stored);
-  } catch (e) {
+  } catch {
     // Storage blocked: fall through to the system preference.
   }
 
@@ -42,7 +42,7 @@
     try {
       if (next === "system") localStorage.removeItem(KEY);
       else localStorage.setItem(KEY, next);
-    } catch (e) {
+    } catch {
       // Storage blocked: the choice still applies for this page view.
     }
     paint();

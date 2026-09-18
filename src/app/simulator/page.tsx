@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Finding } from "@/lib/analyze";
 import type { AvailStatus, PipelineComparison } from "@/lib/pipeline";
 import type { RunResult } from "@/lib/runner";
@@ -167,45 +167,50 @@ export default function SimulatorPage() {
   const [adMode, setAdMode] = useState<"ssai" | "csai">("ssai");
   const [faults, setFaults] = useState<Record<string, boolean>>({});
   const [stage, setStage] = useState<Stage["id"]>("packager");
-  const [data, setData] = useState<SimResponse | null>(null);
+  const [result, setResult] = useState<{ key: string; data: SimResponse } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
-  const run = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const body: Record<string, unknown> = {
-        signalStyle,
-        markerStyle,
-        stitchMode,
-        protocol,
-        adMode,
-        faults: {
-          ...Object.fromEntries(
-            Object.entries(faults).filter(([k, v]) => v && k !== "untranscribedAvail"),
-          ),
-          ...(faults.untranscribedAvail ? { untranscribedAvail: 1001 } : {}),
-        },
-      };
-      const res = await fetch("/api/simulate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "Simulation failed");
-      setData(j);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Simulation failed");
-    } finally {
-      setBusy(false);
-    }
-  }, [signalStyle, markerStyle, stitchMode, protocol, adMode, faults]);
+  const body = {
+    signalStyle,
+    markerStyle,
+    stitchMode,
+    protocol,
+    adMode,
+    faults: {
+      ...Object.fromEntries(Object.entries(faults).filter(([k, v]) => v && k !== "untranscribedAvail")),
+      ...(faults.untranscribedAvail ? { untranscribedAvail: 1001 } : {}),
+    },
+  };
+  // The request is fully described by the controls, so the controls are the
+  // cache key: the view is stale exactly when the key it was fetched for is no
+  // longer the current one. Deriving it this way means the effect never has to
+  // set state synchronously to say "loading".
+  const key = JSON.stringify(body);
+  const data = result?.data ?? null;
+  const busy = result?.key !== key;
 
   useEffect(() => {
-    void run();
-  }, [run]);
+    const ctl = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch("/api/simulate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: key,
+          signal: ctl.signal,
+        });
+        const j = await res.json();
+        if (ctl.signal.aborted) return;
+        if (!res.ok) throw new Error(j.error ?? "Simulation failed");
+        setResult({ key, data: j });
+        setError(null);
+      } catch (e) {
+        if (ctl.signal.aborted) return;
+        setError(e instanceof Error ? e.message : "Simulation failed");
+      }
+    })();
+    return () => ctl.abort();
+  }, [key]);
 
   const current = data?.stages.find((s) => s.id === stage);
   const comparison = data && !("error" in data.analysis.comparison) ? data.analysis.comparison : null;
@@ -317,7 +322,7 @@ export default function SimulatorPage() {
       )}
 
       {data && (
-        <>
+        <div className={busy ? "opacity-60 transition-opacity" : "transition-opacity"}>
           <section className="mb-6 grid gap-2 sm:grid-cols-4">
             {data.stages.map((s) => (
               <button
@@ -526,7 +531,7 @@ export default function SimulatorPage() {
               </div>
             </section>
           )}
-        </>
+        </div>
       )}
 
       {busy && !data && <p className="text-sm text-muted">Running the chain…</p>}
