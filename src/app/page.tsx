@@ -37,7 +37,7 @@ function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
                   <td className="px-3 py-1.5">{p.duration.toFixed(3)}s</td>
                   <td className="px-3 py-1.5">
                     {p.isAd ? (
-                      <span className="rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                      <span className="rounded border border-warn-line bg-warn-soft px-1.5 py-0.5 text-[10px] text-warn">
                         AD
                       </span>
                     ) : (
@@ -45,10 +45,10 @@ function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
                     )}
                     {p.segmentationType && <span className="ml-2 font-sans text-muted">{p.segmentationType}</span>}
                   </td>
-                  <td className={`px-3 py-1.5 ${p.avSkew > 0.1 ? "text-amber-300" : "text-muted"}`}>
+                  <td className={`px-3 py-1.5 ${p.avSkew > 0.1 ? "text-warn" : "text-muted"}`}>
                     {(p.avSkew * 1000).toFixed(1)}ms
                   </td>
-                  <td className={`px-3 py-1.5 ${gapBad ? "text-red-300" : "text-muted"}`}>
+                  <td className={`px-3 py-1.5 ${gapBad ? "text-danger" : "text-muted"}`}>
                     {gap === undefined
                       ? "—"
                       : (() => {
@@ -115,12 +115,12 @@ function ProbePanel({ probe }: { probe: SegmentProbe }) {
                     <td className="px-3 py-1.5">
                       {s.section ? (
                         s.section.crcValid ? (
-                          <span className="text-emerald-400">valid</span>
+                          <span className="text-ok">valid</span>
                         ) : (
-                          <span className="text-amber-300">invalid</span>
+                          <span className="text-warn">invalid</span>
                         )
                       ) : (
-                        <span className="text-red-300">undecodable</span>
+                        <span className="text-danger">undecodable</span>
                       )}
                     </td>
                   </tr>
@@ -156,17 +156,17 @@ function InterstitialTable({ interstitials }: { interstitials: Interstitial[] })
               <tr key={n} className="border-b border-edge/40 last:border-0">
                 <td className="px-4 py-1.5">{i.id ?? "—"}</td>
                 <td className="px-3 py-1.5 text-muted">{secs(i.startTime)}</td>
-                <td className="px-3 py-1.5">{i.duration !== undefined ? secs(i.duration) : <span className="text-amber-300">none</span>}</td>
+                <td className="px-3 py-1.5">{i.duration !== undefined ? secs(i.duration) : <span className="text-warn">none</span>}</td>
                 <td className="px-3 py-1.5 text-muted">{i.cue.length ? i.cue.join(",") : "—"}</td>
                 <td className="px-3 py-1.5">
                   {i.assetUri && i.assetList ? (
-                    <span className="text-red-300">URI and LIST</span>
+                    <span className="text-danger">URI and LIST</span>
                   ) : i.assetUri ? (
                     <span className="text-muted">X-ASSET-URI</span>
                   ) : i.assetList ? (
                     <span className="text-muted">X-ASSET-LIST</span>
                   ) : (
-                    <span className="text-red-300">none</span>
+                    <span className="text-danger">none</span>
                   )}
                 </td>
               </tr>
@@ -205,9 +205,9 @@ const SAMPLES: { id?: string; label: string; url?: string; note: string; recorde
 ];
 
 const SEVERITY_STYLE: Record<string, { dot: string; chip: string; label: string }> = {
-  error: { dot: "bg-red-500", chip: "bg-red-500/10 text-red-300 border-red-500/30", label: "Error" },
-  warning: { dot: "bg-amber-400", chip: "bg-amber-400/10 text-amber-200 border-amber-400/30", label: "Warning" },
-  info: { dot: "bg-sky-400", chip: "bg-sky-400/10 text-sky-200 border-sky-400/30", label: "Info" },
+  error: { dot: "bg-danger", chip: "bg-danger-soft text-danger border-danger-line", label: "Error" },
+  warning: { dot: "bg-warn", chip: "bg-warn-soft text-warn border-warn-line", label: "Warning" },
+  info: { dot: "bg-info", chip: "bg-info-soft text-info border-info-line", label: "Info" },
 };
 
 function secs(n: number | undefined, d = 2) {
@@ -227,7 +227,7 @@ function FindingRow({ f }: { f: Finding }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="font-medium">{f.title}</span>
-          <code className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-[11px] text-muted">{f.code}</code>
+          <code className="rounded bg-raise px-1.5 py-0.5 font-mono text-[11px] text-muted">{f.code}</code>
           {f.rendition && <span className="text-[11px] text-muted">in {f.rendition}</span>}
           {f.lineNumber !== undefined && <span className="text-[11px] text-muted">line {f.lineNumber}</span>}
         </div>
@@ -249,7 +249,7 @@ function BreakCard({ b }: { b: AdBreak }) {
     <div className="rounded-lg border border-edge bg-panel">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-white/[0.02]"
+        className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-raise"
       >
         <span className="font-mono text-xs text-muted">#{b.index}</span>
         <span className="flex-1">
@@ -267,7 +267,7 @@ function BreakCard({ b }: { b: AdBreak }) {
           <span className="block text-[11px] text-muted">
             {b.segmentCount} segment{b.segmentCount === 1 ? "" : "s"}
             {delta !== undefined && Math.abs(delta) > 0.01 && (
-              <span className={Math.abs(delta) > 0.5 ? "text-amber-300" : ""}>
+              <span className={Math.abs(delta) > 0.5 ? "text-warn" : ""}>
                 {" "}· {delta > 0 ? "+" : ""}
                 {delta.toFixed(2)}s
               </span>
@@ -281,17 +281,17 @@ function BreakCard({ b }: { b: AdBreak }) {
             </span>
           )}
           {b.inProgress && (
-            <span className="rounded border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[10px] text-sky-200">
+            <span className="rounded border border-info-line bg-info-soft px-1.5 py-0.5 text-[10px] text-info">
               open
             </span>
           )}
           {!b.closed && !b.inProgress && (
-            <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300">
+            <span className="rounded border border-danger-line bg-danger-soft px-1.5 py-0.5 text-[10px] text-danger">
               unclosed
             </span>
           )}
           {b.signal && !b.signal.ok && (
-            <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300">
+            <span className="rounded border border-danger-line bg-danger-soft px-1.5 py-0.5 text-[10px] text-danger">
               bad SCTE-35
             </span>
           )}
@@ -320,7 +320,7 @@ function BreakCard({ b }: { b: AdBreak }) {
 
           <div className="mt-3">
             <div className="mb-1 text-[11px] uppercase tracking-wide text-muted">Manifest tag</div>
-            <pre className="overflow-x-auto rounded bg-black/40 p-2 font-mono text-[11px] leading-relaxed">{b.outTag}</pre>
+            <pre className="overflow-x-auto rounded bg-code p-2 font-mono text-[11px] leading-relaxed">{b.outTag}</pre>
           </div>
 
           {sec && (
@@ -328,11 +328,11 @@ function BreakCard({ b }: { b: AdBreak }) {
               <div className="mb-1 text-[11px] uppercase tracking-wide text-muted">
                 Decoded splice_info_section — {sec.spliceCommandName}
                 {" · CRC "}
-                <span className={sec.crcValid ? "text-emerald-400" : "text-red-400"}>
+                <span className={sec.crcValid ? "text-ok" : "text-danger"}>
                   {sec.crcValid ? "valid" : "INVALID"}
                 </span>
               </div>
-              <pre className="overflow-x-auto rounded bg-black/40 p-2 font-mono text-[11px] leading-relaxed text-muted">
+              <pre className="overflow-x-auto rounded bg-code p-2 font-mono text-[11px] leading-relaxed text-muted">
 {JSON.stringify(
   {
     protocol_version: sec.protocolVersion,
@@ -350,7 +350,7 @@ function BreakCard({ b }: { b: AdBreak }) {
             </div>
           )}
           {b.signal && !b.signal.ok && (
-            <p className="mt-3 rounded border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-200">
+            <p className="mt-3 rounded border border-danger-line bg-danger-soft p-2 text-sm text-danger">
               SCTE-35 decode failed: {b.signal.error}
             </p>
           )}
@@ -364,7 +364,7 @@ function Row({ k, v, warn, mono }: { k: string; v: string; warn?: boolean; mono?
   return (
     <div className="flex justify-between gap-4 border-b border-edge/50 py-1">
       <dt className="text-muted">{k}</dt>
-      <dd className={`${mono ? "font-mono text-xs" : ""} ${warn ? "text-amber-300" : ""} min-w-0 break-all text-right`}>
+      <dd className={`${mono ? "font-mono text-xs" : ""} ${warn ? "text-warn" : ""} min-w-0 break-all text-right`}>
         {v}
       </dd>
     </div>
@@ -435,7 +435,7 @@ function Tag({ on, yes, no, warnOnNo }: { on: boolean; yes: string; no: string; 
   return (
     <span
       className={`rounded border px-2 py-1 ${
-        on ? "border-edge text-muted" : warnOnNo ? "border-amber-400/30 bg-amber-400/10 text-amber-200" : "border-edge text-muted"
+        on ? "border-edge text-muted" : warnOnNo ? "border-warn-line bg-warn-soft text-warn" : "border-edge text-muted"
       }`}
     >
       {on ? yes : no}
@@ -493,10 +493,10 @@ export default function Home() {
 
   const verdictStyle =
     result?.summary.verdict === "fail"
-      ? "border-red-500/40 bg-red-500/10"
+      ? "border-danger-line bg-danger-soft"
       : result?.summary.verdict === "warn"
-        ? "border-amber-400/40 bg-amber-400/10"
-        : "border-emerald-500/40 bg-emerald-500/10";
+        ? "border-warn-line bg-warn-soft"
+        : "border-ok-line bg-ok-soft";
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
@@ -532,7 +532,7 @@ export default function Home() {
               key={m}
               onClick={() => setMode(m)}
               className={`rounded px-3 py-1.5 ${
-                mode === m ? "bg-white/10 text-foreground" : "text-muted hover:text-foreground"
+                mode === m ? "bg-raise-strong text-foreground" : "text-muted hover:text-foreground"
               }`}
             >
               {m === "url" ? "Playlist URL" : "Paste manifest"}
@@ -547,12 +547,12 @@ export default function Home() {
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !loading && run()}
               placeholder="https://example.com/live/master.m3u8  or  manifest.mpd"
-              className="flex-1 rounded-lg border border-edge bg-black/30 px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
+              className="flex-1 rounded-lg border border-edge bg-input px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
             />
             <button
               onClick={() => run()}
               disabled={loading || !url.trim()}
-              className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-[#04121f] disabled:opacity-40"
+              className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-on-accent disabled:opacity-40"
             >
               {loading ? "Analysing…" : "Analyse"}
             </button>
@@ -564,12 +564,12 @@ export default function Home() {
               onChange={(e) => setPaste(e.target.value)}
               rows={10}
               placeholder="#EXTM3U&#10;#EXT-X-VERSION:3&#10;…"
-              className="w-full rounded-lg border border-edge bg-black/30 px-3 py-2 font-mono text-xs outline-none placeholder:text-muted/60 focus:border-accent"
+              className="w-full rounded-lg border border-edge bg-input px-3 py-2 font-mono text-xs outline-none placeholder:text-muted/60 focus:border-accent"
             />
             <button
               onClick={() => run()}
               disabled={loading || !paste.trim()}
-              className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-[#04121f] disabled:opacity-40"
+              className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-on-accent disabled:opacity-40"
             >
               {loading ? "Analysing…" : "Analyse pasted playlist"}
             </button>
@@ -613,7 +613,7 @@ export default function Home() {
       </section>
 
       {error && (
-        <div className="mt-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <div className="mt-6 rounded-lg border border-danger-line bg-danger-soft px-4 py-3 text-sm text-danger">
           {error}
         </div>
       )}
@@ -633,8 +633,9 @@ export default function Home() {
                 <div className="mt-0.5 font-mono text-[11px] break-all text-muted">{result.sourceUri}</div>
                 {result.recorded && (
                   <div className="mt-1 text-[11px] text-muted">
-                    Captured {result.recorded.capturedAt} from a live service, so this analysis is
-                    reproducible whether or not that origin is still up.
+                    {result.recorded.synthetic
+                      ? "Generated by a script in the repository rather than captured, so no operator's stream is redistributed — and every SCTE-35 payload in it is verified against this decoder."
+                      : `Captured ${result.recorded.capturedAt} from a public demo service, so this analysis is reproducible whether or not that origin is still up.`}
                   </div>
                 )}
               </div>
@@ -676,7 +677,7 @@ export default function Home() {
                     key={r.uri + i}
                     onClick={() => setActive(i)}
                     className={`rounded px-3 py-1.5 ${
-                      active === i ? "bg-white/10 text-foreground" : "text-muted hover:text-foreground"
+                      active === i ? "bg-raise-strong text-foreground" : "text-muted hover:text-foreground"
                     }`}
                   >
                     {r.label}

@@ -30,7 +30,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ...result,
         sourceUri: `recorded: ${sample.label}`,
-        recorded: { id: sample.id, label: sample.label, capturedAt: sample.capturedAt, liveUrl: sample.liveUrl },
+        recorded: {
+          id: sample.id,
+          label: sample.label,
+          capturedAt: sample.capturedAt,
+          liveUrl: sample.liveUrl,
+          synthetic: !!sample.synthetic,
+        },
       });
     }
     if (body.text && body.text.trim()) {

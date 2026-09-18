@@ -7,7 +7,11 @@ reconstructs every ad break, decodes the SCTE-35 riding with it, and reports the
 conditions that make server-side ad insertion mis-fire. Then it watches the
 stream and tells you when that changes.
 
-**Live demo: [splicecheck.vercel.app](https://splicecheck.vercel.app)**
+**Live demo: [splicecheck.vercel.app](https://splicecheck.vercel.app)** ·
+**Reference: [how ad insertion works](https://splicecheck.vercel.app/guide)**
+
+The interface follows the viewer's colour theme, and can be set to light or dark
+explicitly.
 
 Three parts, plus a CLI:
 

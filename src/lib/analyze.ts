@@ -147,7 +147,7 @@ export interface RenditionAnalysis {
 export interface AnalysisResult {
   sourceUri: string;
   /** set when the analysis ran against a recorded bundle rather than the network */
-  recorded?: { id: string; label: string; capturedAt: string; liveUrl?: string };
+  recorded?: { id: string; label: string; capturedAt: string; liveUrl?: string; synthetic?: boolean };
   /** set when segments were opened and read */
   probe?: import("./segments").SegmentProbe;
   probeError?: string;

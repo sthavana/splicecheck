@@ -50,9 +50,9 @@ interface AlertRow {
 }
 
 const SEV = {
-  error: { dot: "bg-red-500", text: "text-red-300", chip: "border-red-500/30 bg-red-500/10 text-red-300" },
-  warning: { dot: "bg-amber-400", text: "text-amber-200", chip: "border-amber-400/30 bg-amber-400/10 text-amber-200" },
-  info: { dot: "bg-sky-400", text: "text-sky-200", chip: "border-sky-400/30 bg-sky-400/10 text-sky-200" },
+  error: { dot: "bg-danger", text: "text-danger", chip: "border-danger-line bg-danger-soft text-danger" },
+  warning: { dot: "bg-warn", text: "text-warn", chip: "border-warn-line bg-warn-soft text-warn" },
+  info: { dot: "bg-info", text: "text-info", chip: "border-info-line bg-info-soft text-info" },
 };
 
 function ago(t: number) {
@@ -69,7 +69,7 @@ function FillTrend({ history }: { history: MonitorRow["history"] }) {
     <span className="flex items-end gap-[2px]" title="Fill rate over recent polls">
       {points.map((h, i) => {
         const v = h.fillRate ?? 0;
-        const colour = v >= 0.99 ? "bg-emerald-500" : v >= 0.9 ? "bg-amber-400" : "bg-red-500";
+        const colour = v >= 0.99 ? "bg-ok" : v >= 0.9 ? "bg-warn" : "bg-danger";
         return (
           <span
             key={i}
@@ -88,12 +88,12 @@ function Sparkline({ history }: { history: MonitorRow["history"] }) {
     <div className="flex items-end gap-[2px]" title="Recent polls — red: errors, amber: warnings, grey: unreachable">
       {cells.map((h, i) => {
         const color = !h.ok
-          ? "bg-neutral-600"
+          ? "bg-mark-off"
           : h.errors > 0
-            ? "bg-red-500"
+            ? "bg-danger"
             : h.verdict === "warn"
-              ? "bg-amber-400"
-              : "bg-emerald-500";
+              ? "bg-warn"
+              : "bg-ok";
         return <span key={i} className={`h-4 w-[3px] rounded-sm ${color}`} />;
       })}
       {cells.length === 0 && <span className="text-[11px] text-muted">no polls yet</span>}
@@ -213,10 +213,10 @@ export default function Monitors() {
       </header>
 
       {scheduler && !scheduler.running && scheduler.reason && (
-        <div className="mb-6 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3">
-          <div className="font-medium text-amber-100">Polling is not running on this deployment</div>
-          <p className="mt-1 text-sm leading-relaxed text-amber-100/70">{scheduler.reason}</p>
-          <p className="mt-2 text-sm leading-relaxed text-amber-100/70">
+        <div className="mb-6 rounded-xl border border-warn-line bg-warn-soft px-4 py-3">
+          <div className="font-medium text-warn">Polling is not running on this deployment</div>
+          <p className="mt-1 text-sm leading-relaxed text-warn">{scheduler.reason}</p>
+          <p className="mt-2 text-sm leading-relaxed text-warn">
             Everything below still works on demand — add a stream and press{" "}
             <span className="font-mono text-xs">poll now</span> to run a real analysis against it. What
             will not happen is the part that matters in production: polling on an interval and
@@ -232,12 +232,12 @@ export default function Monitors() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://example.com/live/manifest.mpd  or  master.m3u8"
-            className="rounded-lg border border-edge bg-black/30 px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
+            className="rounded-lg border border-edge bg-input px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
           />
           <button
             onClick={add}
             disabled={busy || !url.trim()}
-            className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-[#04121f] disabled:opacity-40"
+            className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-on-accent disabled:opacity-40"
           >
             {busy ? "Adding…" : "Monitor"}
           </button>
@@ -247,9 +247,9 @@ export default function Monitors() {
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Label (optional)"
-            className="rounded-lg border border-edge bg-black/30 px-3 py-2 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
+            className="rounded-lg border border-edge bg-input px-3 py-2 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
           />
-          <label className="flex items-center gap-2 rounded-lg border border-edge bg-black/30 px-3 py-2 text-sm text-muted">
+          <label className="flex items-center gap-2 rounded-lg border border-edge bg-input px-3 py-2 text-sm text-muted">
             every
             <input
               type="number"
@@ -265,7 +265,7 @@ export default function Monitors() {
             value={webhook}
             onChange={(e) => setWebhook(e.target.value)}
             placeholder="Slack webhook URL (optional)"
-            className="rounded-lg border border-edge bg-black/30 px-3 py-2 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
+            className="rounded-lg border border-edge bg-input px-3 py-2 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
           />
         </div>
         <div className="mt-2">
@@ -273,10 +273,10 @@ export default function Monitors() {
             value={stitched}
             onChange={(e) => setStitched(e.target.value)}
             placeholder="Stitched output URL (optional) — compares every poll and tracks fill rate"
-            className="w-full rounded-lg border border-edge bg-black/30 px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
+            className="w-full rounded-lg border border-edge bg-input px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
           />
         </div>
-        {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </section>
 
       <section className="mt-8">
@@ -298,14 +298,14 @@ export default function Monitors() {
                       <span
                         className={`h-2 w-2 rounded-full ${
                           !m.enabled
-                            ? "bg-neutral-600"
+                            ? "bg-mark-off"
                             : m.last?.ok === 0
-                              ? "bg-neutral-500"
+                              ? "bg-mark-off"
                               : (m.last?.errors ?? 0) > 0
-                                ? "bg-red-500"
+                                ? "bg-danger"
                                 : m.last?.verdict === "warn"
-                                  ? "bg-amber-400"
-                                  : "bg-emerald-500"
+                                  ? "bg-warn"
+                                  : "bg-ok"
                         }`}
                       />
                       <span className="font-medium">{m.label}</span>
@@ -325,7 +325,7 @@ export default function Monitors() {
                     <button onClick={() => patch(m.id, { enabled: !m.enabled })} className="rounded border border-edge px-2 py-1 text-muted hover:text-foreground">
                       {m.enabled ? "pause" : "resume"}
                     </button>
-                    <button onClick={() => remove(m.id)} className="rounded border border-edge px-2 py-1 text-muted hover:text-red-300">
+                    <button onClick={() => remove(m.id)} className="rounded border border-edge px-2 py-1 text-muted hover:text-danger">
                       remove
                     </button>
                   </div>
@@ -337,17 +337,17 @@ export default function Monitors() {
                   {m.last && <span>last {ago(m.last.at)} in {m.last.durationMs}ms</span>}
                   {m.last?.ok === 1 && (
                     <>
-                      <span className={m.last.errors > 0 ? "text-red-300" : ""}>{m.last.errors} errors</span>
-                      <span className={m.last.warnings > 0 ? "text-amber-200" : ""}>{m.last.warnings} warnings</span>
+                      <span className={m.last.errors > 0 ? "text-danger" : ""}>{m.last.errors} errors</span>
+                      <span className={m.last.warnings > 0 ? "text-warn" : ""}>{m.last.warnings} warnings</span>
                       <span>{m.last.breakCount} breaks in window</span>
                     </>
                   )}
-                  {m.last?.ok === 0 && <span className="text-red-300">unreachable: {m.last.error}</span>}
+                  {m.last?.ok === 0 && <span className="text-danger">unreachable: {m.last.error}</span>}
                   {m.webhookUrl && <span>webhook on</span>}
                 </div>
 
                 {m.stitchedUrl && (
-                  <div className="mt-3 rounded-lg border border-edge/70 bg-black/20 px-3 py-2">
+                  <div className="mt-3 rounded-lg border border-edge/70 bg-code px-3 py-2">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                       <span className="text-[11px] uppercase tracking-wide text-muted">Pipeline</span>
                       {m.last?.fillRate !== null && m.last?.fillRate !== undefined ? (
@@ -355,10 +355,10 @@ export default function Monitors() {
                           <span
                             className={
                               m.last.fillRate >= 0.99
-                                ? "text-emerald-300"
+                                ? "text-ok"
                                 : m.last.fillRate >= 0.9
-                                  ? "text-amber-200"
-                                  : "text-red-300"
+                                  ? "text-warn"
+                                  : "text-danger"
                             }
                           >
                             {(m.last.fillRate * 100).toFixed(1)}% filled
@@ -408,7 +408,7 @@ export default function Monitors() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2">
                     <span className="font-medium">{a.title}</span>
-                    <code className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-[11px] text-muted">{a.code}</code>
+                    <code className="rounded bg-raise px-1.5 py-0.5 font-mono text-[11px] text-muted">{a.code}</code>
                     <span className="text-[11px] text-muted">{ago(a.at)}</span>
                   </div>
                   <p className="mt-1 text-sm leading-relaxed text-muted">{a.detail}</p>

@@ -9,45 +9,45 @@ import type { Finding } from "@/lib/analyze";
 const STATUS: Record<AvailStatus, { label: string; chip: string; blurb: string }> = {
   filled: {
     label: "filled",
-    chip: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    chip: "border-ok-line bg-ok-soft text-ok",
     blurb: "Substituted content covers the avail",
   },
   "under-filled": {
     label: "under-filled",
-    chip: "border-amber-400/30 bg-amber-400/10 text-amber-200",
+    chip: "border-warn-line bg-warn-soft text-warn",
     blurb: "Short of the signalled duration — slate or an early return",
   },
   "over-filled": {
     label: "over-filled",
-    chip: "border-amber-400/30 bg-amber-400/10 text-amber-200",
+    chip: "border-warn-line bg-warn-soft text-warn",
     blurb: "Runs past the break — content after it is cut",
   },
   passthrough: {
     label: "passed through",
-    chip: "border-red-500/30 bg-red-500/10 text-red-300",
+    chip: "border-danger-line bg-danger-soft text-danger",
     blurb: "Break opened but nothing was substituted",
   },
   "not-stitched": {
     label: "not stitched",
-    chip: "border-red-500/30 bg-red-500/10 text-red-300",
+    chip: "border-danger-line bg-danger-soft text-danger",
     blurb: "Signalled upstream, absent from the output",
   },
   unsignalled: {
     label: "unsignalled",
-    chip: "border-sky-400/30 bg-sky-400/10 text-sky-200",
+    chip: "border-info-line bg-info-soft text-info",
     blurb: "In the output with nothing upstream asking for it",
   },
   unmeasurable: {
     label: "in progress",
-    chip: "border-edge bg-white/5 text-muted",
+    chip: "border-edge bg-raise text-muted",
     blurb: "Still open at the live edge",
   },
 };
 
 const SEV: Record<string, string> = {
-  error: "bg-red-500",
-  warning: "bg-amber-400",
-  info: "bg-sky-400",
+  error: "bg-danger",
+  warning: "bg-warn",
+  info: "bg-info",
 };
 
 function secs(n: number | undefined) {
@@ -62,12 +62,12 @@ function FillBar({ a }: { a: AvailComparison }) {
   const ratio = Math.max(0, Math.min(a.fillRatio ?? (a.status === "not-stitched" ? 0 : 1), 1.4));
   const colour =
     a.status === "filled"
-      ? "bg-emerald-500"
+      ? "bg-ok"
       : a.status === "not-stitched" || a.status === "passthrough"
-        ? "bg-red-500"
-        : "bg-amber-400";
+        ? "bg-danger"
+        : "bg-warn";
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-raise">
       <div className={`h-full ${colour}`} style={{ width: `${Math.min(ratio, 1) * 100}%` }} />
     </div>
   );
@@ -111,10 +111,10 @@ export default function Compare() {
 
   const verdictStyle =
     result?.summary.verdict === "fail"
-      ? "border-red-500/40 bg-red-500/10"
+      ? "border-danger-line bg-danger-soft"
       : result?.summary.verdict === "warn"
-        ? "border-amber-400/40 bg-amber-400/10"
-        : "border-emerald-500/40 bg-emerald-500/10";
+        ? "border-warn-line bg-warn-soft"
+        : "border-ok-line bg-ok-soft";
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
@@ -146,7 +146,7 @@ export default function Compare() {
               value={sourceUrl}
               onChange={(e) => setSourceUrl(e.target.value)}
               placeholder="https://packager/live/master.m3u8"
-              className="w-full rounded-lg border border-edge bg-black/30 px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
+              className="w-full rounded-lg border border-edge bg-input px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
             />
           </label>
           <label className="block">
@@ -157,7 +157,7 @@ export default function Compare() {
               value={stitchedUrl}
               onChange={(e) => setStitchedUrl(e.target.value)}
               placeholder="https://ssai/v1/session/master.m3u8"
-              className="w-full rounded-lg border border-edge bg-black/30 px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
+              className="w-full rounded-lg border border-edge bg-input px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
             />
           </label>
         </div>
@@ -165,7 +165,7 @@ export default function Compare() {
           <button
             onClick={() => run()}
             disabled={loading || !sourceUrl.trim() || !stitchedUrl.trim()}
-            className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-[#04121f] disabled:opacity-40"
+            className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-on-accent disabled:opacity-40"
           >
             {loading ? "Comparing…" : "Compare"}
           </button>
@@ -179,7 +179,7 @@ export default function Compare() {
             The two streams are aligned on wall clock, so they need not be the same protocol.
           </span>
         </div>
-        {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </section>
 
       {result && (
@@ -198,12 +198,12 @@ export default function Compare() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
-                <Count label="filled" n={result.summary.filled} tone="text-emerald-300" />
-                <Count label="under-filled" n={result.summary.underFilled} tone="text-amber-200" />
-                <Count label="over-filled" n={result.summary.overFilled} tone="text-amber-200" />
-                <Count label="passed through" n={result.summary.passthrough} tone="text-red-300" />
-                <Count label="not stitched" n={result.summary.notStitched} tone="text-red-300" />
-                <Count label="unsignalled" n={result.summary.unsignalled} tone="text-sky-200" />
+                <Count label="filled" n={result.summary.filled} tone="text-ok" />
+                <Count label="under-filled" n={result.summary.underFilled} tone="text-warn" />
+                <Count label="over-filled" n={result.summary.overFilled} tone="text-warn" />
+                <Count label="passed through" n={result.summary.passthrough} tone="text-danger" />
+                <Count label="not stitched" n={result.summary.notStitched} tone="text-danger" />
+                <Count label="unsignalled" n={result.summary.unsignalled} tone="text-info" />
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 font-mono text-[11px] text-muted">
@@ -252,18 +252,18 @@ export default function Compare() {
                         {a.substituted === undefined ? (
                           <span className="text-muted">—</span>
                         ) : a.substituted ? (
-                          <span className="text-emerald-300">yes</span>
+                          <span className="text-ok">yes</span>
                         ) : (
-                          <span className="text-red-300">no</span>
+                          <span className="text-danger">no</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs">
                         {a.marked === undefined ? (
                           <span className="text-muted">—</span>
                         ) : a.marked ? (
-                          <span className="text-emerald-300">yes</span>
+                          <span className="text-ok">yes</span>
                         ) : (
-                          <span className="text-amber-300">no</span>
+                          <span className="text-warn">no</span>
                         )}
                       </td>
                     </tr>
@@ -283,7 +283,7 @@ export default function Compare() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-x-2">
                         <span className="font-medium">{f.title}</span>
-                        <code className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-[11px] text-muted">
+                        <code className="rounded bg-raise px-1.5 py-0.5 font-mono text-[11px] text-muted">
                           {f.code}
                         </code>
                       </div>
