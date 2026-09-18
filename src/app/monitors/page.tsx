@@ -11,6 +11,7 @@ interface MonitorRow {
   intervalSeconds: number;
   enabled: number;
   webhookUrl: string | null;
+  stitchedUrl: string | null;
   lastRunAt: number | null;
   consecutiveFailures: number;
   last: {
@@ -23,8 +24,18 @@ interface MonitorRow {
     protocol: string | null;
     error: string | null;
     durationMs: number;
+    fillRate: number | null;
+    availsSignalled: number | null;
+    availsMissed: number | null;
   } | null;
-  history: { at: number; ok: number; verdict: string | null; errors: number; breakCount: number }[];
+  history: {
+    at: number;
+    ok: number;
+    verdict: string | null;
+    errors: number;
+    breakCount: number;
+    fillRate: number | null;
+  }[];
 }
 
 interface AlertRow {
@@ -49,6 +60,26 @@ function ago(t: number) {
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
   return `${Math.round(s / 3600)}h ago`;
+}
+
+function FillTrend({ history }: { history: MonitorRow["history"] }) {
+  const points = history.filter((h) => h.fillRate !== null).slice(-40);
+  if (points.length === 0) return null;
+  return (
+    <span className="flex items-end gap-[2px]" title="Fill rate over recent polls">
+      {points.map((h, i) => {
+        const v = h.fillRate ?? 0;
+        const colour = v >= 0.99 ? "bg-emerald-500" : v >= 0.9 ? "bg-amber-400" : "bg-red-500";
+        return (
+          <span
+            key={i}
+            className={`w-[3px] rounded-sm ${colour}`}
+            style={{ height: `${Math.max(2, Math.round(v * 16))}px` }}
+          />
+        );
+      })}
+    </span>
+  );
 }
 
 function Sparkline({ history }: { history: MonitorRow["history"] }) {
@@ -78,6 +109,7 @@ export default function Monitors() {
   const [label, setLabel] = useState("");
   const [interval, setIntervalSec] = useState(60);
   const [webhook, setWebhook] = useState("");
+  const [stitched, setStitched] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,13 +146,20 @@ export default function Monitors() {
       const res = await fetch("/api/monitors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, label, intervalSeconds: interval, webhookUrl: webhook }),
+        body: JSON.stringify({
+          url,
+          label,
+          intervalSeconds: interval,
+          webhookUrl: webhook,
+          stitchedUrl: stitched,
+        }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Could not add monitor");
       setUrl("");
       setLabel("");
       setWebhook("");
+      setStitched("");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add monitor");
@@ -227,6 +266,14 @@ export default function Monitors() {
             className="rounded-lg border border-edge bg-black/30 px-3 py-2 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
           />
         </div>
+        <div className="mt-2">
+          <input
+            value={stitched}
+            onChange={(e) => setStitched(e.target.value)}
+            placeholder="Stitched output URL (optional) — compares every poll and tracks fill rate"
+            className="w-full rounded-lg border border-edge bg-black/30 px-3 py-2 font-mono text-sm outline-none placeholder:text-muted/60 focus:border-accent"
+          />
+        </div>
         {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
       </section>
 
@@ -296,6 +343,39 @@ export default function Monitors() {
                   {m.last?.ok === 0 && <span className="text-red-300">unreachable: {m.last.error}</span>}
                   {m.webhookUrl && <span>webhook on</span>}
                 </div>
+
+                {m.stitchedUrl && (
+                  <div className="mt-3 rounded-lg border border-edge/70 bg-black/20 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                      <span className="text-[11px] uppercase tracking-wide text-muted">Pipeline</span>
+                      {m.last?.fillRate !== null && m.last?.fillRate !== undefined ? (
+                        <>
+                          <span
+                            className={
+                              m.last.fillRate >= 0.99
+                                ? "text-emerald-300"
+                                : m.last.fillRate >= 0.9
+                                  ? "text-amber-200"
+                                  : "text-red-300"
+                            }
+                          >
+                            {(m.last.fillRate * 100).toFixed(1)}% filled
+                          </span>
+                          <span className="text-muted">
+                            {m.last.availsSignalled ?? 0} avails signalled
+                            {m.last.availsMissed ? `, ${m.last.availsMissed} not delivered` : ""}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-muted">no comparison yet</span>
+                      )}
+                      <FillTrend history={m.history} />
+                    </div>
+                    <div className="mt-1 truncate font-mono text-[10px] text-muted">
+                      vs {m.stitchedUrl}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -9,11 +9,14 @@
 
 import { randomUUID } from "node:crypto";
 import { analyzeUrl, type RunResult } from "./runner";
+import { comparePipeline, type PipelineComparison } from "./pipeline";
 import { EPHEMERAL_STORAGE, store, type Monitor, type Run } from "./store";
 
 const FAILURES_BEFORE_ALERT = 2;
 /** grace beyond a break's signalled duration before it counts as stuck */
 const STUCK_BREAK_GRACE_MS = 60_000;
+/** a fill-rate drop worth alerting on, as a proportion */
+const FILL_RATE_DROP = 0.1;
 
 export interface AlertDraft {
   severity: "error" | "warning" | "info";
@@ -37,6 +40,57 @@ function breakKey(b: { eventId?: number; periodId?: string; pdt?: number; startT
   if (b.periodId !== undefined) return `period:${b.periodId}`;
   if (b.pdt !== undefined) return `pdt:${Math.round(b.pdt / 1000)}`;
   return `t:${b.startTime.toFixed(3)}`;
+}
+
+/** Alerts on what the pipeline comparison says, poll over poll. */
+export function diffPipeline(
+  prev: Run | undefined,
+  cmp: PipelineComparison,
+  monitor: Monitor,
+): AlertDraft[] {
+  const alerts: AlertDraft[] = [];
+  const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+
+  // An avail that was signalled and never stitched is the failure that does
+  // not look like one, so it is reported whenever it is present.
+  if (cmp.summary.notStitched > 0) {
+    alerts.push({
+      severity: "error",
+      code: "AVAILS_NOT_STITCHED",
+      title: `${monitor.label}: ${cmp.summary.notStitched} avail(s) signalled but not stitched`,
+      detail: `Over the window both streams cover, ${cmp.summary.notStitched} of ${cmp.summary.signalled} avails appear in the source and never reach the output. Viewers see programme content where an ad should have run.`,
+    });
+  }
+  if (cmp.summary.passthrough > 0) {
+    alerts.push({
+      severity: "error",
+      code: "AVAILS_PASSED_THROUGH",
+      title: `${monitor.label}: ${cmp.summary.passthrough} avail(s) opened but never filled`,
+      detail:
+        "A break exists in the output at the right time with the programme's own media inside it. The manifest is well-formed and no ad was delivered.",
+    });
+  }
+
+  if (prev?.ok && prev.fillRate !== null && prev.fillRate !== undefined) {
+    const drop = prev.fillRate - cmp.summary.fillRate;
+    if (drop >= FILL_RATE_DROP) {
+      alerts.push({
+        severity: "error",
+        code: "FILL_RATE_DROPPED",
+        title: `${monitor.label}: fill rate fell from ${pct(prev.fillRate)} to ${pct(cmp.summary.fillRate)}`,
+        detail: `The proportion of signalled avail seconds the output actually fills dropped by ${pct(drop)} since the previous poll. Unfilled inventory is directly measurable as lost revenue, and nothing about the stream's health will show it.`,
+      });
+    } else if (-drop >= FILL_RATE_DROP) {
+      alerts.push({
+        severity: "info",
+        code: "FILL_RATE_RECOVERED",
+        title: `${monitor.label}: fill rate recovered to ${pct(cmp.summary.fillRate)}`,
+        detail: `Up from ${pct(prev.fillRate)} on the previous poll.`,
+      });
+    }
+  }
+
+  return alerts;
 }
 
 export function diffRun(prev: Run | undefined, result: RunResult, monitor: Monitor): AlertDraft[] {
@@ -205,6 +259,27 @@ export async function runMonitorOnce(monitor: Monitor): Promise<{ ok: boolean; a
     alerts = diffRun(prev, result, monitor);
     alerts.push(...trackBreaks(monitor, result, now));
 
+    // With a stitched output configured, every poll also answers whether the
+    // ad service did its job — turning a spot check into a tracked metric.
+    let pipeline: PipelineComparison | undefined;
+    if (monitor.stitchedUrl) {
+      try {
+        const stitched = await analyzeUrl(monitor.stitchedUrl);
+        pipeline = comparePipeline(result, stitched, {
+          source: "source",
+          stitched: "output",
+        });
+        alerts.push(...diffPipeline(prev, pipeline, monitor));
+      } catch (e) {
+        alerts.push({
+          severity: "warning",
+          code: "PIPELINE_OUTPUT_UNREACHABLE",
+          title: `${monitor.label}: the stitched output could not be read`,
+          detail: `The source fetched fine, so the comparison could not run: ${e instanceof Error ? e.message : String(e)}`,
+        });
+      }
+    }
+
     store.addRun({
       monitorId: monitor.id,
       at: now,
@@ -218,6 +293,10 @@ export async function runMonitorOnce(monitor: Monitor): Promise<{ ok: boolean; a
       protocol: result.meta.protocol,
       durationMs: Date.now() - t0,
       codes: JSON.stringify([...new Set(findings.map((f) => f.code))]),
+      fillRate: pipeline ? pipeline.summary.fillRate : null,
+      availsSignalled: pipeline ? pipeline.summary.signalled : null,
+      availsFilled: pipeline ? pipeline.summary.filled : null,
+      availsMissed: pipeline ? pipeline.summary.notStitched + pipeline.summary.passthrough : null,
     });
     store.markRun(monitor.id, now, false);
   } catch (e) {
@@ -245,6 +324,10 @@ export async function runMonitorOnce(monitor: Monitor): Promise<{ ok: boolean; a
       protocol: null,
       durationMs: Date.now() - t0,
       codes: "[]",
+      fillRate: null,
+      availsSignalled: null,
+      availsFilled: null,
+      availsMissed: null,
     });
     store.markRun(monitor.id, now, true);
   }

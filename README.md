@@ -264,6 +264,15 @@ clearing it alerts once.
 
 ![Two live streams under continuous monitoring, sparklines showing poll history, and the alert feed](docs/monitors.png)
 
+**Tracking a pipeline continuously.** Give a monitor a stitched output URL as
+well as a source and every poll runs the comparison, so fill rate becomes a
+metric with a history rather than a number someone checked once. On top of the
+alerts above: `AVAILS_NOT_STITCHED`, `AVAILS_PASSED_THROUGH`, and
+`FILL_RATE_DROPPED` when the proportion of signalled avail seconds actually
+filled falls by more than ten points between polls. Small movement is ignored —
+fill rate wobbles with where the window falls, and alerting on every percentage
+point makes the monitor unreadable.
+
 A new monitor's first successful poll establishes a baseline and does not alert
 on pre-existing faults — otherwise adding a stream floods you. A finding that
 occurs in several renditions is one alert, not one per rendition.
@@ -389,8 +398,7 @@ would need a hosted database and a cron route instead.
 
 - HLS interstitials (`EXT-X-DATERANGE` with `CLASS="com.apple.hls.interstitial"`)
 - SCTE-224, the policy layer above SCTE-35
-- Continuous pipeline comparison, so fill rate becomes a tracked metric rather
-  than a spot check
+- SCTE-224, the policy layer above SCTE-35
 - Per-creative breakdown inside a filled avail — which creatives ran, and
   whether the pod was assembled as the ad server intended
 - Running the pipeline comparison continuously, so fill rate becomes a tracked

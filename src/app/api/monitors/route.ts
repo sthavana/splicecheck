@@ -23,12 +23,22 @@ export async function GET() {
             protocol: last.protocol,
             error: last.error,
             durationMs: last.durationMs,
+            fillRate: last.fillRate,
+            availsSignalled: last.availsSignalled,
+            availsMissed: last.availsMissed,
           }
         : null,
       history: runs
         .slice()
         .reverse()
-        .map((r) => ({ at: r.at, ok: r.ok, verdict: r.verdict, errors: r.errors, breakCount: r.breakCount })),
+        .map((r) => ({
+          at: r.at,
+          ok: r.ok,
+          verdict: r.verdict,
+          errors: r.errors,
+          breakCount: r.breakCount,
+          fillRate: r.fillRate,
+        })),
     };
   });
   return NextResponse.json({
@@ -40,7 +50,14 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   startScheduler();
-  let body: { url?: string; label?: string; intervalSeconds?: number; webhookUrl?: string };
+  let body: {
+    url?: string;
+    label?: string;
+    intervalSeconds?: number;
+    webhookUrl?: string;
+    /** optional stitched output, which turns each poll into a pipeline comparison */
+    stitchedUrl?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -51,6 +68,16 @@ export async function POST(req: NextRequest) {
     assertPublicUrl(body.url.trim());
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Invalid URL" }, { status: 400 });
+  }
+  if (body.stitchedUrl?.trim()) {
+    try {
+      assertPublicUrl(body.stitchedUrl.trim());
+    } catch (e) {
+      return NextResponse.json(
+        { error: `Stitched output: ${e instanceof Error ? e.message : "invalid URL"}` },
+        { status: 400 },
+      );
+    }
   }
   if (body.webhookUrl?.trim()) {
     try {
@@ -68,6 +95,7 @@ export async function POST(req: NextRequest) {
     intervalSeconds: interval,
     enabled: 1,
     webhookUrl: body.webhookUrl?.trim() || null,
+    stitchedUrl: body.stitchedUrl?.trim() || null,
     createdAt: Date.now(),
   });
 

@@ -12,6 +12,7 @@ const monitor: Monitor = {
   intervalSeconds: 30,
   enabled: 1,
   webhookUrl: null,
+  stitchedUrl: null,
   createdAt: 0,
   lastRunAt: 0,
   consecutiveFailures: 0,
@@ -31,6 +32,10 @@ const run = (o: Partial<Run>): Run => ({
   protocol: "dash",
   durationMs: 100,
   codes: "[]",
+  fillRate: null,
+  availsSignalled: null,
+  availsFilled: null,
+  availsMissed: null,
   ...o,
 });
 
@@ -115,4 +120,68 @@ test("one finding across many renditions produces one alert, not one each", () =
   const newAlerts = alerts.filter((a) => a.code === "NEW_VARIANT_MISSING_BREAK");
   assert.equal(newAlerts.length, 1, "four renditions reporting one fault is one alert");
   assert.match(newAlerts[0].detail, /4 renditions/);
+});
+
+
+// --------------------------------------------------- continuous pipeline --
+
+import { diffPipeline } from "../src/lib/monitor";
+import type { PipelineComparison } from "../src/lib/pipeline";
+
+const comparison = (o: Partial<PipelineComparison["summary"]>): PipelineComparison =>
+  ({
+    source: { uri: "s", protocol: "hls", label: "source", breakCount: 4 },
+    stitched: { uri: "o", protocol: "hls", label: "output", breakCount: 4 },
+    avails: [],
+    findings: [],
+    summary: {
+      signalled: 4,
+      filled: 4,
+      notStitched: 0,
+      underFilled: 0,
+      overFilled: 0,
+      passthrough: 0,
+      unsignalled: 0,
+      signalledSeconds: 120,
+      stitchedSeconds: 120,
+      fillRate: 1,
+      verdict: "pass",
+      ...o,
+    },
+  }) as PipelineComparison;
+
+test("pipeline: a healthy comparison poll after poll produces no alerts", () => {
+  const prev = run({ fillRate: 1 });
+  assert.deepEqual(diffPipeline(prev, comparison({}), monitor), []);
+});
+
+test("pipeline: an avail that was never stitched alerts", () => {
+  const alerts = diffPipeline(run({ fillRate: 1 }), comparison({ notStitched: 1, filled: 3 }), monitor);
+  const a = alerts.find((x) => x.code === "AVAILS_NOT_STITCHED");
+  assert.ok(a);
+  assert.equal(a.severity, "error");
+});
+
+test("pipeline: a break opened and filled with the programme alerts", () => {
+  const alerts = diffPipeline(run({ fillRate: 1 }), comparison({ passthrough: 2, filled: 2 }), monitor);
+  assert.ok(alerts.some((x) => x.code === "AVAILS_PASSED_THROUGH"));
+});
+
+test("pipeline: a fill-rate fall is an error, a recovery is not", () => {
+  const dropped = diffPipeline(run({ fillRate: 0.95 }), comparison({ fillRate: 0.6 }), monitor);
+  const d = dropped.find((x) => x.code === "FILL_RATE_DROPPED");
+  assert.ok(d);
+  assert.equal(d.severity, "error");
+  assert.match(d.title, /95\.0% to 60\.0%/);
+
+  const recovered = diffPipeline(run({ fillRate: 0.6 }), comparison({ fillRate: 0.98 }), monitor);
+  const r = recovered.find((x) => x.code === "FILL_RATE_RECOVERED");
+  assert.ok(r);
+  assert.equal(r.severity, "info");
+});
+
+test("pipeline: small fill-rate movement is not worth an alert", () => {
+  // Fill rate wobbles with where the window happens to fall; alerting on every
+  // percentage point would make the monitor unreadable.
+  assert.deepEqual(diffPipeline(run({ fillRate: 1 }), comparison({ fillRate: 0.94 }), monitor), []);
 });

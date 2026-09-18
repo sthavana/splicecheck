@@ -9,6 +9,12 @@ import { dirname, resolve } from "node:path";
 export interface Monitor {
   id: string;
   url: string;
+  /**
+   * When set, each poll also compares `url` (the source feed) with this
+   * stitched output and records the fill rate, turning a spot check into a
+   * tracked metric.
+   */
+  stitchedUrl: string | null;
   label: string;
   intervalSeconds: number;
   enabled: number;
@@ -32,6 +38,11 @@ export interface Run {
   protocol: string | null;
   durationMs: number;
   codes: string;
+  /** pipeline comparison, when the monitor has a stitched output */
+  fillRate: number | null;
+  availsSignalled: number | null;
+  availsFilled: number | null;
+  availsMissed: number | null;
 }
 
 export interface Alert {
@@ -81,7 +92,8 @@ function init(): Database.Database {
       webhookUrl TEXT,
       createdAt INTEGER NOT NULL,
       lastRunAt INTEGER,
-      consecutiveFailures INTEGER NOT NULL DEFAULT 0
+      consecutiveFailures INTEGER NOT NULL DEFAULT 0,
+      stitchedUrl TEXT
     );
     CREATE TABLE IF NOT EXISTS runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,7 +108,11 @@ function init(): Database.Database {
       breakCount INTEGER NOT NULL DEFAULT 0,
       protocol TEXT,
       durationMs INTEGER NOT NULL DEFAULT 0,
-      codes TEXT NOT NULL DEFAULT '[]'
+      codes TEXT NOT NULL DEFAULT '[]',
+      fillRate REAL,
+      availsSignalled INTEGER,
+      availsFilled INTEGER,
+      availsMissed INTEGER
     );
     CREATE INDEX IF NOT EXISTS runs_monitor_at ON runs(monitorId, at DESC);
     CREATE TABLE IF NOT EXISTS alerts (
@@ -121,6 +137,18 @@ function init(): Database.Database {
       PRIMARY KEY (monitorId, breakKey)
     );
   `);
+  // Columns added after the first release; adding them here keeps an existing
+  // database working rather than requiring it to be thrown away.
+  const addColumn = (table: string, column: string, type: string) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  };
+  addColumn("monitors", "stitchedUrl", "TEXT");
+  addColumn("runs", "fillRate", "REAL");
+  addColumn("runs", "availsSignalled", "INTEGER");
+  addColumn("runs", "availsFilled", "INTEGER");
+  addColumn("runs", "availsMissed", "INTEGER");
+
   return db;
 }
 
@@ -137,17 +165,20 @@ export const store = {
   },
   createMonitor(m: Omit<Monitor, "lastRunAt" | "consecutiveFailures">): Monitor {
     db.prepare(
-      `INSERT INTO monitors (id, url, label, intervalSeconds, enabled, webhookUrl, createdAt)
-       VALUES (@id, @url, @label, @intervalSeconds, @enabled, @webhookUrl, @createdAt)`,
+      `INSERT INTO monitors (id, url, label, intervalSeconds, enabled, webhookUrl, createdAt, stitchedUrl)
+       VALUES (@id, @url, @label, @intervalSeconds, @enabled, @webhookUrl, @createdAt, @stitchedUrl)`,
     ).run(m);
     return this.getMonitor(m.id)!;
   },
-  updateMonitor(id: string, patch: Partial<Pick<Monitor, "enabled" | "intervalSeconds" | "label" | "webhookUrl">>) {
+  updateMonitor(
+    id: string,
+    patch: Partial<Pick<Monitor, "enabled" | "intervalSeconds" | "label" | "webhookUrl" | "stitchedUrl">>,
+  ) {
     const cur = this.getMonitor(id);
     if (!cur) return undefined;
     const next = { ...cur, ...patch };
     db.prepare(
-      `UPDATE monitors SET label=@label, intervalSeconds=@intervalSeconds, enabled=@enabled, webhookUrl=@webhookUrl WHERE id=@id`,
+      `UPDATE monitors SET label=@label, intervalSeconds=@intervalSeconds, enabled=@enabled, webhookUrl=@webhookUrl, stitchedUrl=@stitchedUrl WHERE id=@id`,
     ).run(next);
     return this.getMonitor(id);
   },
@@ -165,8 +196,10 @@ export const store = {
   addRun(r: Omit<Run, "id">): number {
     const info = db
       .prepare(
-        `INSERT INTO runs (monitorId, at, ok, error, verdict, errors, warnings, infos, breakCount, protocol, durationMs, codes)
-         VALUES (@monitorId, @at, @ok, @error, @verdict, @errors, @warnings, @infos, @breakCount, @protocol, @durationMs, @codes)`,
+        `INSERT INTO runs (monitorId, at, ok, error, verdict, errors, warnings, infos, breakCount, protocol, durationMs, codes,
+                           fillRate, availsSignalled, availsFilled, availsMissed)
+         VALUES (@monitorId, @at, @ok, @error, @verdict, @errors, @warnings, @infos, @breakCount, @protocol, @durationMs, @codes,
+                 @fillRate, @availsSignalled, @availsFilled, @availsMissed)`,
       )
       .run(r);
     return Number(info.lastInsertRowid);
