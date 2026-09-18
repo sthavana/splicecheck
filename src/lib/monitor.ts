@@ -100,8 +100,12 @@ export function diffRun(prev: Run | undefined, result: RunResult, monitor: Monit
   const prevCodes: Set<string> = new Set(prev?.ok ? (JSON.parse(prev.codes) as string[]) : []);
   const hadPrevGoodRun = !!prev?.ok;
 
-  // Recovery from an outage.
-  if (prev && !prev.ok) {
+  // Recovery from an outage — but only from one that was actually reported.
+  // A single failed poll never raises STREAM_UNREACHABLE, by design: origins
+  // and CDNs hiccup. Announcing recovery from it anyway produces a notice for
+  // an outage nobody was told about, and those were 37 of the 39 recovery
+  // alerts on the first two channels this ran against.
+  if (prev && !prev.ok && monitor.consecutiveFailures >= FAILURES_BEFORE_ALERT) {
     alerts.push({
       severity: "info",
       code: "STREAM_RECOVERED",

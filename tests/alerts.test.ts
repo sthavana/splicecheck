@@ -185,3 +185,37 @@ test("pipeline: small fill-rate movement is not worth an alert", () => {
   // percentage point would make the monitor unreadable.
   assert.deepEqual(diffPipeline(run({ fillRate: 1 }), comparison({ fillRate: 0.94 }), monitor), []);
 });
+
+/* --------------------------------------------- recovery from an outage --
+ * STREAM_UNREACHABLE deliberately waits for two consecutive failures, because
+ * origins and CDNs hiccup. Recovery has to use the same threshold, or a single
+ * blip produces a recovery notice for an outage that was never reported.
+ */
+
+const failed = (o: Partial<Run> = {}) =>
+  run({ ok: 0, error: "fetch failed", verdict: null, ...o });
+
+test("a single failed poll produces no recovery notice", () => {
+  const afterOneBlip: Monitor = { ...monitor, consecutiveFailures: 1 };
+  const alerts = diffRun(failed(), result("pass", 0, 0, 5), afterOneBlip);
+  assert.deepEqual(alerts.map((a) => a.code), []);
+});
+
+test("recovery from a reported outage is announced", () => {
+  const afterOutage: Monitor = { ...monitor, consecutiveFailures: 2 };
+  const alerts = diffRun(failed(), result("pass", 0, 0, 5), afterOutage);
+  assert.deepEqual(alerts.map((a) => a.code), ["STREAM_RECOVERED"]);
+});
+
+test("a longer outage still announces exactly one recovery", () => {
+  const afterLongOutage: Monitor = { ...monitor, consecutiveFailures: 17 };
+  const alerts = diffRun(failed(), result("pass", 0, 0, 5), afterLongOutage);
+  assert.deepEqual(alerts.map((a) => a.code), ["STREAM_RECOVERED"]);
+});
+
+test("a good run after a good run announces nothing", () => {
+  assert.deepEqual(
+    diffRun(run({}), result("pass", 0, 0, 5), monitor).map((a) => a.code),
+    [],
+  );
+});
