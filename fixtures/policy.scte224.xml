@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- An SCTE-224 policy document covering a regional blackout and two ad
+     breaks. Written as a fixture: it deliberately contains a point that
+     matches nothing, one with no policy attached, and one whose expected
+     duration disagrees with the stream. -->
+<Media xmlns="urn:scte:224" id="channel/sports-1" description="Regional policy"
+       effective="2026-09-17T00:00:00Z" expires="2026-09-18T00:00:00Z">
+
+  <!-- Matches the first avail by UPID. -->
+  <MediaPoint id="mp-blackout-start" matchTime="2026-09-17T12:00:12Z" expectedDuration="PT30S">
+    <Signal>
+      <SignalPointID>PROMO-1187</SignalPointID>
+    </Signal>
+    <Apply policy="policy/regional-blackout"/>
+  </MediaPoint>
+
+  <!-- Matches the second avail on wall clock, but expects a different length. -->
+  <MediaPoint id="mp-break-2" matchTime="2026-09-17T12:00:54Z" expectedDuration="PT60S">
+    <Apply policy="policy/alt-content"/>
+  </MediaPoint>
+
+  <!-- Identifies a moment but attaches no policy to it. -->
+  <MediaPoint id="mp-no-policy" matchTime="2026-09-17T12:01:30Z"/>
+
+  <!-- Refers to a time the stream does not signal. -->
+  <MediaPoint id="mp-orphan" matchTime="2026-09-17T13:30:00Z">
+    <Apply policy="policy/regional-blackout"/>
+  </MediaPoint>
+
+  <!-- Already expired, so it governs nothing. -->
+  <MediaPoint id="mp-stale" matchTime="2026-09-16T08:00:00Z" expires="2026-09-16T09:00:00Z">
+    <Apply policy="policy/regional-blackout"/>
+  </MediaPoint>
+</Media>

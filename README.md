@@ -169,6 +169,41 @@ buffer delay. Anchoring on the PCR put every cue a constant 0.125s late against
 a stream that in fact agrees exactly — a difference small enough to look like a
 real defect and to be believed.
 
+## The policy layer
+
+SCTE-35 says *when* something happens. SCTE-224 says *what should be done about
+it*: which audiences see an alternate feed, which regions are blacked out, what
+replaces the content. The two are delivered separately — the cue rides in the
+stream, the policy comes from an ESNI endpoint — so nothing normally checks
+they refer to the same thing.
+
+```bash
+./dist/cli.mjs <stream> --policy policy.xml
+```
+
+```
+  policy: 5 media points · 3 matched a signal · 2 matched nothing · 1 signal ungoverned
+    mp-blackout-start → break 0  policy/regional-blackout
+    mp-break-2 → break 1  policy/alt-content
+    mp-no-policy → break 2  no policy
+
+  ▲ MediaPoint mp-break-2 expects 60s but the stream signals 30s
+  ▲ MediaPoint mp-no-policy applies and removes nothing
+  ▲ MediaPoint mp-orphan matches nothing in the stream
+```
+
+| Code | What it catches |
+| --- | --- |
+| `SCTE224_POINT_UNMATCHED` | A policy expecting a signal the stream does not carry. It will not fire — the blackout or alternate feed simply does not happen |
+| `SCTE224_DURATION_MISMATCH` | A policy written for a different length of event than the stream signals, so alternate content will not fit the avail |
+| `SCTE224_TYPE_MISMATCH` | Policy and stream describing the same moment as different kinds of event |
+| `SCTE224_POINT_NO_POLICY` | A point identifying a moment and attaching nothing to it |
+| `SCTE224_POINT_EXPIRED` | Stale points accumulating in a feed, obscuring what is actually in force |
+| `SCTE224_SIGNAL_NOT_GOVERNED` | Signals no policy covers — context, not a fault, since a blackout schedule does not govern every ad break |
+
+Points match on segmentation UPID where both sides carry one, and on wall clock
+otherwise.
+
 ## The harder half: not crying wolf
 
 The first run against a real stream produced 21 errors and 56 warnings. Nearly
@@ -348,6 +383,7 @@ Takes a URL or a path, so it works against a live origin or a captured manifest.
 | `--quiet` | findings only, without the explanation of each |
 | `--variants <n>` | maximum HLS renditions to fetch |
 | `--segments [n]` | open n segments and read the SCTE-35 inside them (HLS and DASH) |
+| `--policy <file\|url>` | an SCTE-224 document, checked against the stream's signals |
 
 Exit codes make it usable as a gate: **0** no errors, **1** problems found,
 **2** could not analyse the input. CI runs it against the defect fixtures on
@@ -382,6 +418,7 @@ src/lib/store.ts       SQLite state
 src/lib/mp4.ts         ISO BMFF box walking and emsg extraction
 src/lib/ts.ts          MPEG-TS: PAT, PMT, cue sections, ID3-in-PES
 src/lib/segments.ts    reads segments and checks them against the manifest
+src/lib/scte224.ts     policy documents, lined up against the stream's signals
 src/cli.ts             terminal interface over the same analysis
 ```
 
@@ -396,13 +433,7 @@ would need a hosted database and a cron route instead.
 
 ## Not done yet
 
-- HLS interstitials (`EXT-X-DATERANGE` with `CLASS="com.apple.hls.interstitial"`)
-- SCTE-224, the policy layer above SCTE-35
-- SCTE-224, the policy layer above SCTE-35
 - Per-creative breakdown inside a filled avail — which creatives ran, and
   whether the pod was assembled as the ad server intended
-- Running the pipeline comparison continuously, so fill rate becomes a tracked
-  metric rather than a spot check
-- Real signal lead time, which requires the monitor to record when a signal
-  first appeared relative to its splice point rather than inferring it from a
-  single poll
+- Reading segments during a monitor poll, rather than only on demand
+- SCTE-104, the upstream contribution-side form of the same signalling

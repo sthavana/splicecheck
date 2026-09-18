@@ -11,6 +11,7 @@ import { readFile } from "node:fs/promises";
 import { analyzeText, analyzeUrl, type RunResult } from "./lib/runner";
 import { comparePipeline } from "./lib/pipeline";
 import { probeMpd, probeRendition, type SegmentProbe } from "./lib/segments";
+import { compareScte224, isScte224, parseScte224, type Scte224Comparison } from "./lib/scte224";
 import type { Finding } from "./lib/analyze";
 
 const useColour =
@@ -37,6 +38,8 @@ interface Options {
   variants?: number;
   /** number of segments to open, or 0 to stay at the manifest layer */
   segments: number;
+  /** an SCTE-224 policy document to line the stream's signals up against */
+  policy?: string;
 }
 
 function usage(): never {
@@ -53,6 +56,8 @@ Options
   --variants <n>     maximum HLS renditions to fetch (default 6)
   --segments [n]     open n segments and read the SCTE-35 inside them,
                      then check it agrees with the manifest (default 8)
+  --policy <file|url>  an SCTE-224 policy document, checked against the
+                     signals the stream actually carries
   -h, --help         this message
 
 Exit codes
@@ -75,6 +80,7 @@ function parseArgs(argv: string[]): { cmd: string; targets: string[]; opts: Opti
     else if (a === "--strict") opts.strict = true;
     else if (a === "--quiet") opts.quiet = true;
     else if (a === "--variants") opts.variants = Number(argv[++i]);
+    else if (a === "--policy") opts.policy = argv[++i];
     else if (a === "--segments") {
       const next = argv[i + 1];
       opts.segments = next && /^\d+$/.test(next) ? Number(argv[++i]) : 8;
@@ -152,6 +158,23 @@ function verdictLine(verdict: string, errors: number, warnings: number, infos: n
   return `${label}  ${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"}, ${infos} info`;
 }
 
+function printPolicy(cmp: Scte224Comparison) {
+  const points = cmp.matched.length + cmp.unmatchedPoints.length;
+  process.stdout.write(
+    c.dim(
+      `  policy: ${points} media point${points === 1 ? "" : "s"} · ${cmp.matched.length} matched a signal · ` +
+        `${cmp.unmatchedPoints.length} matched nothing · ${cmp.unmatchedBreaks.length} signal(s) ungoverned\n`,
+    ),
+  );
+  for (const m of cmp.matched) {
+    const applied = m.point.applies.length ? m.point.applies.join(", ") : "no policy";
+    process.stdout.write(
+      c.dim(`    ${m.point.id ?? "(unnamed)"} → break ${m.breakIndex}  ${applied}\n`),
+    );
+  }
+  process.stdout.write("\n");
+}
+
 function printProbe(probe: SegmentProbe) {
   process.stdout.write(
     c.dim(
@@ -187,8 +210,18 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
       probe = await probeMpd(r.raw.text, r.raw.uri, first, { maxSegments: opts.segments });
     }
   }
+  // SCTE-224 says what should happen at a signal; the stream says when.
+  let policy: Scte224Comparison | undefined;
+  if (opts.policy && first) {
+    const xml = /^https?:\/\//i.test(opts.policy)
+      ? await (await fetch(opts.policy)).text()
+      : await readFile(opts.policy, "utf8");
+    if (!isScte224(xml)) throw new Error("That does not look like an SCTE-224 document");
+    policy = compareScte224(parseScte224(xml), first.breaks, { label: first.label });
+  }
+
   if (opts.json) {
-    process.stdout.write(JSON.stringify({ ...r, raw: undefined, probe }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ ...r, raw: undefined, probe, policy }, null, 2) + "\n");
   } else {
     const first = r.renditions[0];
     process.stdout.write(`\n${c.bold(r.sourceUri)}\n`);
@@ -200,10 +233,12 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
       ),
     );
     if (probe) printProbe(probe);
+    if (policy) printPolicy(policy);
     const all = [
       ...r.crossFindings,
       ...r.renditions.flatMap((x) => x.findings),
       ...(probe?.findings ?? []),
+      ...(policy?.findings ?? []),
     ];
     if (all.length === 0) process.stdout.write(c.green("  nothing to report\n\n"));
     else {
@@ -212,9 +247,10 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
     }
     // The verdict must account for what the segments said, or the summary
     // contradicts the findings printed directly above it.
-    const pErrors = probe?.findings.filter((f) => f.severity === "error").length ?? 0;
-    const pWarnings = probe?.findings.filter((f) => f.severity === "warning").length ?? 0;
-    const pInfos = probe?.findings.filter((f) => f.severity === "info").length ?? 0;
+    const extra = [...(probe?.findings ?? []), ...(policy?.findings ?? [])];
+    const pErrors = extra.filter((f) => f.severity === "error").length;
+    const pWarnings = extra.filter((f) => f.severity === "warning").length;
+    const pInfos = extra.filter((f) => f.severity === "info").length;
     const errors = r.summary.errors + pErrors;
     const warnings = r.summary.warnings + pWarnings;
     const verdict = errors > 0 ? "fail" : warnings > 0 ? "warn" : "pass";
@@ -222,10 +258,11 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
       `  ${verdictLine(verdict, errors, warnings, r.summary.infos + pInfos)}\n\n`,
     );
   }
-  const probeErrors = probe?.findings.filter((f) => f.severity === "error").length ?? 0;
-  const probeWarnings = probe?.findings.filter((f) => f.severity === "warning").length ?? 0;
-  if (r.summary.errors + probeErrors > 0) return 1;
-  if (opts.strict && r.summary.warnings + probeWarnings > 0) return 1;
+  const extraFindings = [...(probe?.findings ?? []), ...(policy?.findings ?? [])];
+  const extraErrors = extraFindings.filter((f) => f.severity === "error").length;
+  const extraWarnings = extraFindings.filter((f) => f.severity === "warning").length;
+  if (r.summary.errors + extraErrors > 0) return 1;
+  if (opts.strict && r.summary.warnings + extraWarnings > 0) return 1;
   return 0;
 }
 
