@@ -1,0 +1,35 @@
+#EXTM3U
+#EXT-X-VERSION:9
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-PROGRAM-DATE-TIME:2026-09-18T10:00:00.000Z
+# A well-formed pre-roll.
+#EXT-X-DATERANGE:ID="pre",CLASS="com.apple.hls.interstitial",START-DATE="2026-09-18T10:00:00.000Z",CUE="PRE,ONCE",X-ASSET-URI="https://ads.example.com/preroll.m3u8",DURATION=15.0
+#EXTINF:6.000,
+seg0.ts
+#EXTINF:6.000,
+seg1.ts
+# Names nothing to play.
+#EXT-X-DATERANGE:ID="mid-empty",CLASS="com.apple.hls.interstitial",START-DATE="2026-09-18T10:00:12.000Z",DURATION=5.0
+#EXTINF:6.000,
+seg2.ts
+# Names both an asset and a list.
+#EXT-X-DATERANGE:ID="mid-both",CLASS="com.apple.hls.interstitial",START-DATE="2026-09-18T10:00:18.000Z",DURATION=5.0,X-ASSET-URI="https://ads.example.com/a.m3u8",X-ASSET-LIST="https://ads.example.com/list.json"
+#EXTINF:6.000,
+seg3.ts
+# No duration of any kind, and an unrecognised X-SNAP value.
+#EXT-X-DATERANGE:ID="mid-unbounded",CLASS="com.apple.hls.interstitial",START-DATE="2026-09-18T10:00:24.000Z",X-ASSET-URI="https://ads.example.com/b.m3u8",X-SNAP="MIDDLE"
+#EXTINF:6.000,
+seg4.ts
+# Overlaps the one that follows.
+#EXT-X-DATERANGE:ID="overlap-a",CLASS="com.apple.hls.interstitial",START-DATE="2026-09-18T10:00:30.000Z",DURATION=30.0,X-ASSET-URI="https://ads.example.com/c.m3u8"
+#EXTINF:6.000,
+seg5.ts
+#EXT-X-DATERANGE:ID="overlap-b",CLASS="com.apple.hls.interstitial",START-DATE="2026-09-18T10:00:36.000Z",DURATION=30.0,X-ASSET-URI="https://ads.example.com/d.m3u8"
+#EXTINF:6.000,
+seg6.ts
+# Marked both PRE and POST.
+#EXT-X-DATERANGE:ID="both-ends",CLASS="com.apple.hls.interstitial",START-DATE="2026-09-18T10:00:42.000Z",CUE="PRE,POST",X-ASSET-URI="https://ads.example.com/e.m3u8",DURATION=10.0
+#EXTINF:6.000,
+seg7.ts
+#EXT-X-ENDLIST

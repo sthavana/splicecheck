@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { useState } from "react";
-import type { AnalysisResult, AdBreak, Finding, PeriodSummary, RenditionAnalysis } from "@/lib/analyze";
+import type { AnalysisResult, AdBreak, Finding, Interstitial, PeriodSummary, RenditionAnalysis } from "@/lib/analyze";
 import type { SegmentProbe } from "@/lib/segments";
 
 function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
@@ -131,6 +131,50 @@ function ProbePanel({ probe }: { probe: SegmentProbe }) {
         )}
       </div>
     </section>
+  );
+}
+
+function InterstitialTable({ interstitials }: { interstitials: Interstitial[] }) {
+  return (
+    <div className="rounded-lg border border-edge bg-panel">
+      <div className="border-b border-edge px-4 py-2 text-[11px] uppercase tracking-wide text-muted">
+        Interstitials — {interstitials.length} signalled, played by the client rather than spliced
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="text-muted">
+            <tr className="border-b border-edge/70">
+              <th className="px-4 py-2 font-medium">ID</th>
+              <th className="px-3 py-2 font-medium">At</th>
+              <th className="px-3 py-2 font-medium">Duration</th>
+              <th className="px-3 py-2 font-medium">Cue</th>
+              <th className="px-3 py-2 font-medium">Asset</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono">
+            {interstitials.map((i, n) => (
+              <tr key={n} className="border-b border-edge/40 last:border-0">
+                <td className="px-4 py-1.5">{i.id ?? "—"}</td>
+                <td className="px-3 py-1.5 text-muted">{secs(i.startTime)}</td>
+                <td className="px-3 py-1.5">{i.duration !== undefined ? secs(i.duration) : <span className="text-amber-300">none</span>}</td>
+                <td className="px-3 py-1.5 text-muted">{i.cue.length ? i.cue.join(",") : "—"}</td>
+                <td className="px-3 py-1.5">
+                  {i.assetUri && i.assetList ? (
+                    <span className="text-red-300">URI and LIST</span>
+                  ) : i.assetUri ? (
+                    <span className="text-muted">X-ASSET-URI</span>
+                  ) : i.assetList ? (
+                    <span className="text-muted">X-ASSET-LIST</span>
+                  ) : (
+                    <span className="text-red-300">none</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -367,6 +411,10 @@ function RenditionPanel({ r }: { r: RenditionAnalysis }) {
       </div>
 
       {r.protocol === "dash" && r.periods && <PeriodTable periods={r.periods} />}
+
+      {r.interstitials && r.interstitials.length > 0 && (
+        <InterstitialTable interstitials={r.interstitials} />
+      )}
 
       {r.breaks.length > 0 ? (
         <div className="space-y-2">

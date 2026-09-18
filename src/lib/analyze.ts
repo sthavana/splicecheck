@@ -94,6 +94,25 @@ export interface PeriodSummary {
   gapToNext?: number;
 }
 
+/** An EXT-X-DATERANGE describing an HLS interstitial. */
+export interface Interstitial {
+  id?: string;
+  /** seconds into the playlist window */
+  startTime: number;
+  pdt?: number;
+  duration?: number;
+  playoutLimit?: number;
+  resumeOffset?: number;
+  assetUri?: string;
+  assetList?: string;
+  cue: string[];
+  snap: string[];
+  restrict: string[];
+  timelineOccupies?: string;
+  contentMayVary?: string;
+  lineNumber: number;
+}
+
 export interface RenditionAnalysis {
   label: string;
   uri: string;
@@ -105,6 +124,8 @@ export interface RenditionAnalysis {
   playlist?: MediaPlaylist;
   /** DASH only */
   periods?: PeriodSummary[];
+  /** HLS interstitials, which are signalled but not spliced */
+  interstitials?: Interstitial[];
   breaks: AdBreak[];
   findings: Finding[];
   stats: {
@@ -333,6 +354,119 @@ export function analyzeRendition(
         { lineNumber: m.lineNumber, atTime: m.startTime },
       );
     }
+  }
+
+  // ---- interstitials -----------------------------------------------------
+  const interstitials: Interstitial[] = [];
+  const listOf = (v?: string) =>
+    v ? v.split(",").map((x) => x.trim().toUpperCase()).filter(Boolean) : [];
+
+  for (const m of playlist.markers) {
+    if (m.kind !== "INTERSTITIAL") continue;
+    const a = m.attrs;
+    const it: Interstitial = {
+      id: m.id,
+      startTime: m.startTime,
+      pdt: m.pdt,
+      duration: a.DURATION ? Number(a.DURATION) : a["PLANNED-DURATION"] ? Number(a["PLANNED-DURATION"]) : undefined,
+      playoutLimit: a["X-PLAYOUT-LIMIT"] ? Number(a["X-PLAYOUT-LIMIT"]) : undefined,
+      resumeOffset: a["X-RESUME-OFFSET"] !== undefined ? Number(a["X-RESUME-OFFSET"]) : undefined,
+      assetUri: a["X-ASSET-URI"],
+      assetList: a["X-ASSET-LIST"],
+      cue: listOf(a.CUE),
+      snap: listOf(a["X-SNAP"]),
+      restrict: listOf(a["X-RESTRICT"]),
+      timelineOccupies: a["X-TIMELINE-OCCUPIES"],
+      contentMayVary: a["X-CONTENT-MAY-VARY"],
+      lineNumber: m.lineNumber,
+    };
+    interstitials.push(it);
+
+    const where = { lineNumber: m.lineNumber, atTime: m.startTime };
+    const name = it.id ? `"${it.id}"` : `at ${fmt(it.startTime)}s`;
+
+    if (!it.assetUri && !it.assetList) {
+      add(
+        "error",
+        "INTERSTITIAL_NO_ASSET",
+        `Interstitial ${name} names nothing to play`,
+        "An interstitial must carry exactly one of X-ASSET-URI or X-ASSET-LIST. With neither, a player reaching this point has no asset to load and simply continues the primary content — the break is inert.",
+        where,
+      );
+    } else if (it.assetUri && it.assetList) {
+      add(
+        "error",
+        "INTERSTITIAL_AMBIGUOUS_ASSET",
+        `Interstitial ${name} names both X-ASSET-URI and X-ASSET-LIST`,
+        "Exactly one is permitted. Players differ in which they honour, so the interstitial plays different content depending on the client.",
+        where,
+      );
+    }
+
+    if (it.duration === undefined && it.playoutLimit === undefined && !it.assetList) {
+      add(
+        "warning",
+        "INTERSTITIAL_UNBOUNDED",
+        `Interstitial ${name} declares no duration`,
+        "Without DURATION, PLANNED-DURATION or X-PLAYOUT-LIMIT a player cannot know how long the interruption lasts before it fetches the asset, which prevents it from scheduling the return or pre-buffering the primary content.",
+        where,
+      );
+    }
+
+    for (const [attr, values, allowed] of [
+      ["CUE", it.cue, ["PRE", "POST", "ONCE"]],
+      ["X-SNAP", it.snap, ["IN", "OUT"]],
+      ["X-RESTRICT", it.restrict, ["SKIP", "JUMP"]],
+    ] as const) {
+      const bad = values.filter((v) => !allowed.includes(v as never));
+      if (bad.length) {
+        add(
+          "warning",
+          "INTERSTITIAL_UNKNOWN_ATTRIBUTE_VALUE",
+          `Interstitial ${name} has an unrecognised ${attr} value: ${bad.join(", ")}`,
+          `${attr} accepts ${allowed.join(", ")}. A value outside that set is ignored by conforming players, so whatever behaviour it was meant to select does not happen.`,
+          where,
+        );
+      }
+    }
+
+    if (it.cue.includes("PRE") && it.cue.includes("POST")) {
+      add(
+        "error",
+        "INTERSTITIAL_PRE_AND_POST",
+        `Interstitial ${name} is marked both PRE and POST`,
+        "An interstitial cannot play both before the content starts and after it ends.",
+        where,
+      );
+    }
+  }
+
+  // Interstitials that overlap each other.
+  const ranged = interstitials
+    .filter((i) => i.duration !== undefined && !i.cue.includes("PRE") && !i.cue.includes("POST"))
+    .sort((a, b) => a.startTime - b.startTime);
+  for (let i = 1; i < ranged.length; i++) {
+    const prev = ranged[i - 1];
+    const cur = ranged[i];
+    const prevEnd = prev.startTime + (prev.duration ?? 0);
+    if (cur.startTime < prevEnd - EPS) {
+      add(
+        "error",
+        "INTERSTITIAL_OVERLAP",
+        `Interstitials overlap by ${fmt(prevEnd - cur.startTime)}s`,
+        `The interstitial at line ${prev.lineNumber} runs to ${fmt(prevEnd)}s while the one at line ${cur.lineNumber} starts at ${fmt(cur.startTime)}s. A player can only be in one interruption at a time, so one of the two is dropped or truncated.`,
+        { lineNumber: cur.lineNumber, atTime: cur.startTime },
+      );
+    }
+  }
+
+  if (interstitials.length > 0 && breaks.length === 0) {
+    add(
+      "info",
+      "INTERSTITIAL_SIGNALLING",
+      `This playlist signals ${interstitials.length} interstitial${interstitials.length === 1 ? "" : "s"} rather than splicing`,
+      "Ad content is named for the player to load separately rather than spliced into this playlist, so the timeline here stays primary content throughout. Duration and fill cannot be measured from this manifest — they depend on what the asset list returns at playback time.",
+    );
   }
 
   // ---- pair markers into breaks -----------------------------------------
@@ -646,6 +780,7 @@ export function analyzeRendition(
     label,
     uri: playlist.uri,
     protocol: "hls",
+    interstitials,
     contentMediaUris: segs.map((x) => x.uri).filter((u) => !inAvail.has(u)),
     variant,
     playlist,

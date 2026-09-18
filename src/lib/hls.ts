@@ -12,7 +12,8 @@ export type MarkerKind =
   | "SCTE35"
   | "OATCLS-SCTE35"
   | "ASSET"
-  | "SPLICEPOINT";
+  | "SPLICEPOINT"
+  | "INTERSTITIAL";
 
 export interface HlsSegment {
   index: number;
@@ -274,6 +275,19 @@ export function parseMedia(text: string, uri: string): MediaPlaylist {
       pushMarker("CUE-IN", line, ln, {});
     } else if (line.startsWith("#EXT-X-DATERANGE:")) {
       const attrs = parseAttributes(line.slice("#EXT-X-DATERANGE:".length));
+      // An interstitial is a different ad model: rather than splicing content
+      // into this playlist, it names a separate asset for the player to load.
+      if (attrs.CLASS === "com.apple.hls.interstitial") {
+        pushMarker("INTERSTITIAL", line, ln, attrs, {
+          id: attrs.ID,
+          durationAttr: attrs.DURATION
+            ? Number(attrs.DURATION)
+            : attrs["PLANNED-DURATION"]
+              ? Number(attrs["PLANNED-DURATION"])
+              : undefined,
+        });
+        continue;
+      }
       const payload = attrs["SCTE35-OUT"] || attrs["SCTE35-IN"] || attrs["SCTE35-CMD"];
       const source = attrs["SCTE35-OUT"]
         ? "SCTE35-OUT"

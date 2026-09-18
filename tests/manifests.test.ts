@@ -273,3 +273,61 @@ test("cross-rendition: a break closing earlier in audio than video is not a coun
     "a break straddling the live edge must not count as a signalling difference",
   );
 });
+
+// ------------------------------------------------------------ interstitials --
+
+test("HLS interstitials: every planted defect is reported, once", () => {
+  const r = analyzeText(readFileSync("fixtures/interstitials.m3u8", "utf8"), "interstitials.m3u8");
+  const rd = r.renditions[0];
+  assert.equal(rd.interstitials!.length, 7);
+
+  const codes = rd.findings.map((f) => f.code);
+  for (const expected of [
+    "INTERSTITIAL_NO_ASSET",
+    "INTERSTITIAL_AMBIGUOUS_ASSET",
+    "INTERSTITIAL_UNBOUNDED",
+    "INTERSTITIAL_UNKNOWN_ATTRIBUTE_VALUE",
+    "INTERSTITIAL_PRE_AND_POST",
+    "INTERSTITIAL_OVERLAP",
+  ]) {
+    assert.ok(codes.includes(expected), `expected ${expected}`);
+  }
+  // Only one pair actually overlaps, so only one overlap may be reported.
+  assert.equal(codes.filter((c) => c === "INTERSTITIAL_OVERLAP").length, 1);
+});
+
+test("HLS interstitials: attributes are read off the DATERANGE", () => {
+  const r = analyzeText(readFileSync("fixtures/interstitials.m3u8", "utf8"), "i.m3u8");
+  const pre = r.renditions[0].interstitials!.find((i) => i.id === "pre")!;
+  assert.deepEqual(pre.cue, ["PRE", "ONCE"]);
+  assert.equal(pre.duration, 15);
+  assert.equal(pre.assetUri, "https://ads.example.com/preroll.m3u8");
+  assert.equal(pre.assetList, undefined);
+});
+
+test("HLS interstitials: a well-formed one reports nothing", () => {
+  const clean = [
+    "#EXTM3U",
+    "#EXT-X-VERSION:9",
+    "#EXT-X-TARGETDURATION:6",
+    "#EXT-X-PROGRAM-DATE-TIME:2026-09-18T10:00:00.000Z",
+    '#EXT-X-DATERANGE:ID="mid",CLASS="com.apple.hls.interstitial",START-DATE="2026-09-18T10:00:12.000Z",DURATION=30.0,X-ASSET-LIST="https://ads.example.com/list.json",X-RESUME-OFFSET=0,X-SNAP="OUT,IN"',
+    "#EXTINF:6.000,",
+    "a.ts",
+    "#EXTINF:6.000,",
+    "b.ts",
+    "#EXT-X-ENDLIST",
+  ].join("\n");
+  const r = analyzeText(clean, "clean.m3u8");
+  assert.equal(r.summary.errors, 0);
+  assert.equal(r.summary.warnings, 0);
+  assert.equal(r.renditions[0].interstitials!.length, 1);
+});
+
+test("HLS: an interstitial DATERANGE is not counted as a spliced avail", () => {
+  // The two models are different: an interstitial names an asset for the
+  // player to load, and splices nothing into this playlist.
+  const r = analyzeText(readFileSync("fixtures/interstitials.m3u8", "utf8"), "i.m3u8");
+  assert.equal(r.renditions[0].breaks.length, 0);
+  assert.ok(r.renditions[0].findings.some((f) => f.code === "INTERSTITIAL_SIGNALLING"));
+});
