@@ -19,7 +19,8 @@
   --input:         #ffffff;
   --code:          #f1f4f8;
   --border:        #dbe1ea;
-  --muted:         #5b6676;
+  --soft:          #37414f;
+  --muted:         #596372;
   --accent:        #1263cc;
   --on-accent:     #ffffff;
   --mark-off:      #b6bfcc;
@@ -51,7 +52,8 @@
     --input:         #070b10;
     --code:          #05080c;
     --border:        #1e2732;
-    --muted:         #8b98a8;
+    --soft:          #c5cedb;
+    --muted:         #94a1b1;
     --accent:        #4da3ff;
     --on-accent:     #04121f;
     --mark-off:      #4a5666;
@@ -82,7 +84,8 @@
   --input:         #070b10;
   --code:          #05080c;
   --border:        #1e2732;
-  --muted:         #8b98a8;
+  --soft:          #c5cedb;
+  --muted:         #94a1b1;
   --accent:        #4da3ff;
   --on-accent:     #04121f;
   --mark-off:      #4a5666;
@@ -110,6 +113,7 @@
   --color-input:        var(--input);
   --color-code:         var(--code);
   --color-edge:         var(--border);
+  --color-soft:         var(--soft);
   --color-muted:        var(--muted);
   --color-accent:       var(--accent);
   --color-on-accent:    var(--on-accent);

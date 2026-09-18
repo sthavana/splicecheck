@@ -123,7 +123,7 @@ export default function Compare() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Splice<span className="text-accent">Check</span> pipeline
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-soft">
             Compare the signalling feed going into an ad-insertion service with the stitched output
             coming out of it, and see which avails were actually filled. The encoder team says the
             SCTE-35 was correct; the ad-tech team says the break never arrived. This puts the two
@@ -288,7 +288,7 @@ export default function Compare() {
                           {f.code}
                         </code>
                       </div>
-                      <p className="mt-1 text-sm leading-relaxed text-muted">{f.detail}</p>
+                      <p className="mt-1 text-sm leading-relaxed text-soft">{f.detail}</p>
                     </div>
                   </div>
                 ))}
@@ -298,7 +298,7 @@ export default function Compare() {
         </>
       )}
 
-      <footer className="mt-16 border-t border-edge pt-4 text-xs leading-relaxed text-muted">
+      <footer className="mt-16 border-t border-edge pt-4 text-xs leading-relaxed text-soft">
         Avails are matched on wall clock, within 6s. Substitution is inferred from the shape of the
         media paths inside the avail against the output&rsquo;s own surrounding content — evidence, not
         proof, and reported as such. Only the window both streams cover is compared.

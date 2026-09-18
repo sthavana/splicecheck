@@ -33,7 +33,7 @@ function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
               return (
                 <tr key={p.index} className="border-b border-edge/40 last:border-0">
                   <td className="px-4 py-1.5">{p.id ?? p.index}</td>
-                  <td className="px-3 py-1.5 text-muted">{(p.start - t0).toFixed(3)}s</td>
+                  <td className="px-3 py-1.5 text-soft">{(p.start - t0).toFixed(3)}s</td>
                   <td className="px-3 py-1.5">{p.duration.toFixed(3)}s</td>
                   <td className="px-3 py-1.5">
                     {p.isAd ? (
@@ -45,10 +45,10 @@ function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
                     )}
                     {p.segmentationType && <span className="ml-2 font-sans text-muted">{p.segmentationType}</span>}
                   </td>
-                  <td className={`px-3 py-1.5 ${p.avSkew > 0.1 ? "text-warn" : "text-muted"}`}>
+                  <td className={`px-3 py-1.5 ${p.avSkew > 0.1 ? "text-warn" : "text-soft"}`}>
                     {(p.avSkew * 1000).toFixed(1)}ms
                   </td>
-                  <td className={`px-3 py-1.5 ${gapBad ? "text-danger" : "text-muted"}`}>
+                  <td className={`px-3 py-1.5 ${gapBad ? "text-danger" : "text-soft"}`}>
                     {gap === undefined
                       ? "—"
                       : (() => {
@@ -83,7 +83,7 @@ function ProbePanel({ probe }: { probe: SegmentProbe }) {
           {probe.fetchErrors.length > 0 && ` · ${probe.fetchErrors.length} fetch error(s)`}
         </div>
         {probe.signals.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-muted">
+          <p className="px-4 py-6 text-center text-sm text-soft">
             No SCTE-35 found in the segments that were read — for this stream the manifest is the
             only carriage.
           </p>
@@ -105,7 +105,7 @@ function ProbePanel({ probe }: { probe: SegmentProbe }) {
                     <td className="px-4 py-1.5">{s.pdt ? clock(s.pdt) : "unanchored"}</td>
                     <td className="px-3 py-1.5">{s.eventId ?? "—"}</td>
                     <td className="px-3 py-1.5">{s.durationSeconds ? `${s.durationSeconds}s` : "—"}</td>
-                    <td className="px-3 py-1.5 text-muted">
+                    <td className="px-3 py-1.5 text-soft">
                       {s.tsCarriage === "id3-pes"
                         ? `ID3 PRIV · PID 0x${s.pid?.toString(16)}`
                         : s.pid !== undefined
@@ -155,9 +155,9 @@ function InterstitialTable({ interstitials }: { interstitials: Interstitial[] })
             {interstitials.map((i, n) => (
               <tr key={n} className="border-b border-edge/40 last:border-0">
                 <td className="px-4 py-1.5">{i.id ?? "—"}</td>
-                <td className="px-3 py-1.5 text-muted">{secs(i.startTime)}</td>
+                <td className="px-3 py-1.5 text-soft">{secs(i.startTime)}</td>
                 <td className="px-3 py-1.5">{i.duration !== undefined ? secs(i.duration) : <span className="text-warn">none</span>}</td>
-                <td className="px-3 py-1.5 text-muted">{i.cue.length ? i.cue.join(",") : "—"}</td>
+                <td className="px-3 py-1.5 text-soft">{i.cue.length ? i.cue.join(",") : "—"}</td>
                 <td className="px-3 py-1.5">
                   {i.assetUri && i.assetList ? (
                     <span className="text-danger">URI and LIST</span>
@@ -231,7 +231,7 @@ function FindingRow({ f }: { f: Finding }) {
           {f.rendition && <span className="text-[11px] text-muted">in {f.rendition}</span>}
           {f.lineNumber !== undefined && <span className="text-[11px] text-muted">line {f.lineNumber}</span>}
         </div>
-        <p className="mt-1 text-sm leading-relaxed text-muted">{f.detail}</p>
+        <p className="mt-1 text-sm leading-relaxed text-soft">{f.detail}</p>
       </div>
     </div>
   );
@@ -332,7 +332,7 @@ function BreakCard({ b }: { b: AdBreak }) {
                   {sec.crcValid ? "valid" : "INVALID"}
                 </span>
               </div>
-              <pre className="overflow-x-auto rounded bg-code p-2 font-mono text-[11px] leading-relaxed text-muted">
+              <pre className="overflow-x-auto rounded bg-code p-2 font-mono text-[11px] leading-relaxed text-soft">
 {JSON.stringify(
   {
     protocol_version: sec.protocolVersion,
@@ -363,7 +363,7 @@ function BreakCard({ b }: { b: AdBreak }) {
 function Row({ k, v, warn, mono }: { k: string; v: string; warn?: boolean; mono?: boolean }) {
   return (
     <div className="flex justify-between gap-4 border-b border-edge/50 py-1">
-      <dt className="text-muted">{k}</dt>
+      <dt className="text-soft">{k}</dt>
       <dd className={`${mono ? "font-mono text-xs" : ""} ${warn ? "text-warn" : ""} min-w-0 break-all text-right`}>
         {v}
       </dd>
@@ -423,7 +423,7 @@ function RenditionPanel({ r }: { r: RenditionAnalysis }) {
           ))}
         </div>
       ) : (
-        <p className="rounded-lg border border-edge bg-panel px-4 py-6 text-center text-sm text-muted">
+        <p className="rounded-lg border border-edge bg-panel px-4 py-6 text-center text-sm text-soft">
           No ad breaks found in this rendition&rsquo;s current window.
         </p>
       )}
@@ -505,7 +505,7 @@ export default function Home() {
         <h1 className="text-2xl font-semibold tracking-tight">
           Splice<span className="text-accent">Check</span>
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-soft">
           Point it at an HLS or DASH stream and it reconstructs every ad break, decodes the SCTE-35
           riding with it, and reports the conditions that make server-side ad insertion mis-fire —
           unclosed avails, duration disagreements, missing discontinuities, renditions that do not

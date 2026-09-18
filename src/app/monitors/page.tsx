@@ -200,7 +200,7 @@ export default function Monitors() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Splice<span className="text-accent">Check</span> monitors
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-soft">
             Poll a stream continuously and alert when its ad signalling changes for the worse — a break
             that never closes, signalling that disappears, a new fault that was not there on the last poll.
           </p>
@@ -286,7 +286,7 @@ export default function Monitors() {
           <span className="text-xs text-muted">{monitors.length} monitored</span>
         </div>
         {monitors.length === 0 ? (
-          <p className="rounded-xl border border-edge bg-panel px-4 py-8 text-center text-sm text-muted">
+          <p className="rounded-xl border border-edge bg-panel px-4 py-8 text-center text-sm text-soft">
             Nothing monitored yet.
           </p>
         ) : (
@@ -395,7 +395,7 @@ export default function Monitors() {
           )}
         </div>
         {alerts.length === 0 ? (
-          <p className="rounded-xl border border-edge bg-panel px-4 py-8 text-center text-sm text-muted">
+          <p className="rounded-xl border border-edge bg-panel px-4 py-8 text-center text-sm text-soft">
             No alerts. Alerts fire on transitions — when something becomes true, not for as long as it stays true.
           </p>
         ) : (
@@ -412,7 +412,7 @@ export default function Monitors() {
                     <code className="rounded bg-raise px-1.5 py-0.5 font-mono text-[11px] text-muted">{a.code}</code>
                     <span className="text-[11px] text-muted">{ago(a.at)}</span>
                   </div>
-                  <p className="mt-1 text-sm leading-relaxed text-muted">{a.detail}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-soft">{a.detail}</p>
                 </div>
                 {!a.acknowledged && (
                   <button onClick={() => ack([a.id])} className="shrink-0 self-start text-[11px] text-muted hover:text-foreground">
