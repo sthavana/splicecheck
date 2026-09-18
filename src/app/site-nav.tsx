@@ -8,6 +8,7 @@ const TOOL = [
   { href: "/", label: "Inspector" },
   { href: "/compare", label: "Pipeline comparison" },
   { href: "/monitors", label: "Monitors" },
+  { href: "/simulator", label: "Simulator" },
 ];
 
 /** Static pages, so they are plain anchors rather than router links. */
