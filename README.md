@@ -100,9 +100,13 @@ npm install && npm run dev      # then click a sample
   `urn:mpeg:dash:period-continuity:2015`. Many players therefore re-initialise
   the decoder at every ad transition, producing a glitch the encoder is not
   causing.
+![The period timeline: thirteen periods across the presentation, ad periods marked out from programme](docs/inspector-periods.png)
+
 - Avails pair start to end on `segmentation_event_id` and land on their
   signalled duration; every boundary meets to the tick, so nothing is reported
   about the timeline.
+
+![A break expanded to its decoded SCTE-35: command, event id, segmentation type, UPID and duration](docs/inspector-scte35.png)
 
 ## Below the manifest
 
@@ -307,6 +311,8 @@ clearing it alerts once.
 | `STREAM_RECOVERED` / `ERRORS_CLEARED` / `SIGNALLING_RESUMED` | The all-clear |
 
 ![Two live streams under continuous monitoring, sparklines showing poll history, and the alert feed](docs/monitors.png)
+
+![The pipeline comparison: each avail graded filled, under-filled or passed through, with the fill rate across the window](docs/pipeline-compare.png)
 
 **Tracking a pipeline continuously.** Give a monitor a stitched output URL as
 well as a source and every poll runs the comparison, so fill rate becomes a
