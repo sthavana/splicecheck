@@ -10,6 +10,25 @@ export const metadata: Metadata = {
   title: "SpliceCheck — ad signalling for HLS and DASH",
   description:
     "Ad signalling in HLS and DASH, end to end: inspect a live stream, compare what goes into an ad-insertion service with what comes out, watch it continuously, or build a stream and break it on purpose.",
+  metadataBase: new URL("https://splicecheck.vercel.app"),
+  // Without these a link posted to LinkedIn or Slack renders as a bare URL,
+  // which reads as broken rather than as understated.
+  openGraph: {
+    title: "SpliceCheck — ad signalling for HLS and DASH",
+    description:
+      "Inspect a live stream, compare what goes into an ad-insertion service with what comes out, watch it continuously, or build a stream and break it on purpose.",
+    url: "https://splicecheck.vercel.app",
+    siteName: "SpliceCheck",
+    type: "website",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "SpliceCheck — ad signalling in HLS and DASH, end to end" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SpliceCheck — ad signalling for HLS and DASH",
+    description:
+      "Inspect a live stream, compare what goes into an ad-insertion service with what comes out, watch it continuously, or build a stream and break it on purpose.",
+    images: ["/og.png"],
+  },
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
