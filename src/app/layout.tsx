@@ -7,7 +7,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "SpliceCheck — ad-break inspector for HLS and DASH",
+  title: "SpliceCheck — ad signalling for HLS and DASH",
   description:
     "Ad signalling in HLS and DASH, end to end: inspect a live stream, compare what goes into an ad-insertion service with what comes out, watch it continuously, or build a stream and break it on purpose.",
   icons: {
