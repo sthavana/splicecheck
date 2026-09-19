@@ -32,6 +32,7 @@ function sanitise(input: Partial<SimConfig>): SimConfig {
       ? input.stitchMode!
       : "fill",
     protocol: input.protocol === "dash" ? "dash" : "hls",
+    lowLatency: input.lowLatency === true,
     adMode: input.adMode === "csai" ? "csai" : "ssai",
     faults: typeof input.faults === "object" && input.faults ? input.faults : {},
   };

@@ -29,6 +29,8 @@ export interface SimConfig {
   stitchMode: StitchMode;
   /** Which protocol the packager emits. */
   protocol: "hls" | "dash";
+  /** Publish partial segments, and declare the contract that goes with them. */
+  lowLatency: boolean;
   /** Where the ad is spliced: in the manifest, or in the player. */
   adMode: "ssai" | "csai";
   dash?: Partial<DashSpec>;
@@ -51,6 +53,12 @@ export interface SimConfig {
       adBlocked?: boolean;
       /** CSAI: the creative CDN does not deliver. */
       creativeFailsToLoad?: boolean;
+      /** LL: hold-back under the specification floor of three part durations. */
+      partHoldBackTooSmall?: boolean;
+      /** LL: offer delta updates that drop the ad signalling. */
+      deltaUpdateDropsDateRanges?: boolean;
+      /** LL: publish parts but make clients poll for them. */
+      noBlockingReload?: boolean;
     };
 }
 
@@ -67,6 +75,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   stitchMode: "fill",
   protocol: "hls",
   adMode: "ssai",
+  lowLatency: false,
   faults: {},
 };
 
@@ -121,8 +130,19 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
     invalidCrc: f.invalidCrc,
   });
 
+  const partSeconds = config.segmentSeconds / 6;
   const pkg: PackagerSpec = {
     markerStyle: config.markerStyle,
+    lowLatency: config.lowLatency
+      ? {
+          partSeconds,
+          partHoldBack: f.partHoldBackTooSmall ? partSeconds * 2 : partSeconds * 3,
+          canBlockReload: !f.noBlockingReload,
+          canSkipUntil: config.windowSegments * config.segmentSeconds * 0.4,
+          // Delta updates keep the signalling unless the fault says otherwise.
+          canSkipDateRanges: !f.deltaUpdateDropsDateRanges,
+        }
+      : undefined,
     faults: {
       dropCueIn: f.dropCueIn,
       noDiscontinuity: f.noDiscontinuity,

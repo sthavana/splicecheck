@@ -539,6 +539,7 @@ img { max-width: 100%; }
         <li><a href="#xlink">Remote Periods</a></li>
         <li><a href="#dai">DAI, and the hybrid</a></li>
         <li><a href="#decisioning">Ad decisioning</a></li>
+        <li><a href="#lowlatency">Low latency</a></li>
         <li><a href="#measurement">Measurement</a></li>
         <li><a href="#failure">Where it breaks</a></li>
         <li><a href="#standards">Standards</a></li>
@@ -1353,8 +1354,111 @@ descriptors         1 × avail_descriptor (CUEI)
 </section>
 
 <!-- ============================================================= 10 -->
-<section id="measurement">
+<!-- ============================================================= 11 -->
+<section id="lowlatency">
   <span class="sec-num">11</span>
+  <h2>Low latency, and the decision budget</h2>
+
+  <p class="lede">Cutting the distance to live from thirty seconds to two does not change what ad
+  insertion has to do. It changes how long there is to do it — and that turns out to be the
+  constraint everything else bends around.</p>
+
+  <p>An ordinary HLS player sits three target durations behind the live edge: with six-second
+  segments, about eighteen seconds. A DASH player sits at <code>suggestedPresentationDelay</code>,
+  typically a similar figure. That distance is not waste; it is the buffer that absorbs a slow
+  request, a rebuffer, a bitrate switch. It is also the window in which an ad decision can happen
+  without anybody noticing.</p>
+
+  <p>Low latency spends it. Both protocols get there the same way — publish the media before it is
+  finished — and both then need a contract telling clients how to consume something incomplete.</p>
+
+  <h3>The two contracts</h3>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th></th><th>LL-HLS</th><th>LL-DASH</th></tr></thead>
+    <tbody>
+      <tr><td>Unit published early</td><td><code>EXT-X-PART</code>, a fragment of a segment</td><td>A CMAF chunk inside a segment</td></tr>
+      <tr><td>Declared by</td><td><code>EXT-X-PART-INF:PART-TARGET</code></td><td><code>availabilityTimeComplete="false"</code> with <code>availabilityTimeOffset</code></td></tr>
+      <tr><td>How close to live</td><td><code>PART-HOLD-BACK</code>, at least 3 × part target</td><td><code>ServiceDescription</code> → <code>Latency@target</code></td></tr>
+      <tr><td>Getting the next piece</td><td>Blocking reload, plus <code>EXT-X-PRELOAD-HINT</code></td><td>Chunked transfer on an open request</td></tr>
+      <tr><td>Switching bitrate</td><td><code>EXT-X-RENDITION-REPORT</code></td><td>Segment numbering is already shared</td></tr>
+      <tr><td>Cheaper updates</td><td><code>EXT-X-SKIP</code> delta updates</td><td><code>minimumUpdatePeriod="PT0S"</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>Both contracts can be stated incorrectly, and the failure is rarely a stream that does not play.
+  It is a stream that plays badly in a way that looks like a network problem: a
+  <code>PART-HOLD-BACK</code> under three part durations puts clients closer to live than the
+  packager can sustain, so they run out of parts and rebuffer. Chunked availability without
+  <code>availabilityTimeComplete="false"</code> tells clients a segment is finished when it is not,
+  so they request it and get a truncation or a 404.</p>
+
+  <div class="note">
+    <span class="tag">The decision budget</span>
+    <p>Here is the number that decides whether a low-latency stream can carry advertising at all.
+    <code>PART-HOLD-BACK</code> is typically about one second. <code>Latency@target</code> is
+    typically two to three. That is the <em>entire</em> time available, from the cue appearing to the
+    splice happening, for an ad decision service to call out, run an auction, select a pod, confirm
+    the creatives are transcoded and have them ready to stitch.</p>
+    <p>At eighteen seconds of latency, none of that was urgent. At one second, a decision that takes
+    four hundred milliseconds is using nearly half the budget — and a decision that misses it does
+    not arrive late, it does not arrive at all: the splice point passes and the avail goes unfilled.</p>
+  </div>
+
+  <h3>Lead time is the answer, and it is not in any tag</h3>
+
+  <p>The way out is not a faster ad server. It is to stop making the decision at the splice point.
+  A cue carried far enough ahead of the break gives the decision the time it needs regardless of how
+  close to live the viewer is sitting — which is why <code>EXT-X-DATERANGE</code> with a future
+  <code>START-DATE</code>, and a DASH <code>Event</code> with a <code>presentationTime</code> ahead of
+  the live edge, matter far more at low latency than they ever did at eighteen seconds.</p>
+
+  <p>No tag states the lead time. It is the gap between when the cue first appears in the manifest
+  and when the splice happens, and reading it requires watching the manifest over time rather than
+  looking at one copy of it.</p>
+
+  <h3>The trap that only bites advertising</h3>
+
+  <div class="note fail">
+    <span class="tag">Delta updates and DATERANGE</span>
+    <p><code>EXT-X-SERVER-CONTROL:CAN-SKIP-UNTIL</code> offers clients a cheaper playlist: a delta
+    update with the older segments omitted. On a low-latency stream, where the playlist is refetched
+    several times a second, most clients take it.</p>
+    <p>Unless the packager also sets <code>CAN-SKIP-DATERANGES=YES</code>, those delta updates drop
+    the <code>EXT-X-DATERANGE</code> tags along with the skipped segments. Clients using delta updates
+    stop seeing the ad signalling; clients doing full reloads still see it. <strong>The break exists
+    for some viewers and not others</strong> — and every manifest involved is valid, so nothing
+    upstream reports a fault. The only symptom is a fill rate that is inexplicably lower than the
+    number of avails signalled.</p>
+  </div>
+
+  <h3>What to check</h3>
+
+  <ul>
+    <li><strong>The hold-back against the part target.</strong> Below three parts, the client cannot
+    keep its buffer fed. This is the most common reason a low-latency stream is unwatchable rather
+    than merely late.</li>
+    <li><strong>Blocking reload actually enabled.</strong> Parts without
+    <code>CAN-BLOCK-RELOAD=YES</code> mean the client polls, and the latency the parts bought is spent
+    again waiting for the next poll.</li>
+    <li><strong>One live point, not two.</strong> A DASH manifest that states both
+    <code>suggestedPresentationDelay</code> and a <code>Latency@target</code> several seconds apart
+    has two populations of players watching different moments, and a cue reaches them at different
+    times.</li>
+    <li><strong>A target the segmentation can reach.</strong> Asking for three seconds with six-second
+    segments and no chunked delivery is asking for something arithmetically impossible.</li>
+    <li><strong>Delta updates that keep the signalling.</strong> Above.</li>
+  </ul>
+
+  <p><strong>SpliceCheck</strong> checks each of these in both protocols, and reports the decision
+  budget explicitly — the hold-back or the latency target — because it is the figure most teams have
+  never actually written down.</p>
+</section>
+
+<section id="measurement">
+  <span class="sec-num">12</span>
   <h2>Measurement, and why it is contested</h2>
 
   <p class="lede">An impression is what gets billed, so the definition of one is a commercial
@@ -1392,7 +1496,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 11 -->
 <section id="failure">
-  <span class="sec-num">12</span>
+  <span class="sec-num">13</span>
   <h2>Where it breaks</h2>
 
   <p class="lede">Almost every failure below leaves the stream playing perfectly. That is the defining
@@ -1431,7 +1535,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 12 -->
 <section id="standards">
-  <span class="sec-num">13</span>
+  <span class="sec-num">14</span>
   <h2>The standards, and who owns them</h2>
 
   <div class="tablewrap">
@@ -1456,7 +1560,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 13 -->
 <section id="glossary">
-  <span class="sec-num">14</span>
+  <span class="sec-num">15</span>
   <h2>Glossary</h2>
 
   <dl class="gloss">

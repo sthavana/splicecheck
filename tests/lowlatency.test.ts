@@ -146,3 +146,53 @@ test("publishing early while claiming the segment is complete is contradictory",
 test("an ordinary live MPD gets none of these rules", () => {
   assert.deepEqual(dashLl({ sd: false, chunked: false }), []);
 });
+
+/* ----------------------------------------- the simulator emitting parts --
+ * The chain can publish partial segments, so these rules have a stream whose
+ * ground truth is known rather than somebody else's packager to guess at.
+ */
+
+import { runChain, DEFAULT_CONFIG, type SimConfig } from "../src/lib/sim/chain";
+
+function simCodes(cfg: Partial<SimConfig>): string[] {
+  const a = runChain({ ...DEFAULT_CONFIG, lowLatency: true, ...cfg, faults: { ...(cfg.faults ?? {}) } })
+    .analysis.origin;
+  if ("error" in a) throw new Error(a.error);
+  return a.renditions.flatMap((r) => r.findings).map((f) => `${f.severity}:${f.code}`);
+}
+
+test("the simulator's low-latency output is correct by default", () => {
+  const bad = ll(simCodes({})).filter((c) => !c.startsWith("info:"));
+  assert.deepEqual(bad, []);
+});
+
+test("the simulator's low-latency playlist carries the tags it should", () => {
+  const text = runChain({ ...DEFAULT_CONFIG, lowLatency: true, faults: {} }).origin.text;
+  for (const tag of [
+    "#EXT-X-PART-INF:PART-TARGET=",
+    "#EXT-X-SERVER-CONTROL:",
+    "#EXT-X-PART:",
+    "INDEPENDENT=YES",
+    "#EXT-X-PRELOAD-HINT:",
+    "#EXT-X-RENDITION-REPORT:",
+  ]) {
+    assert.ok(text.includes(tag), `missing ${tag}`);
+  }
+  // Only the newest segment is published as parts; older ones are complete.
+  const partLines = text.split("\n").filter((l) => l.startsWith("#EXT-X-PART:"));
+  assert.ok(partLines.length >= 2 && partLines.length <= 12, `${partLines.length} parts`);
+});
+
+test("each low-latency fault is caught, and only when switched on", () => {
+  assert.ok(ll(simCodes({ faults: { partHoldBackTooSmall: true } })).includes("error:LL_PART_HOLD_BACK_TOO_SMALL"));
+  assert.ok(ll(simCodes({ faults: { deltaUpdateDropsDateRanges: true } })).includes("warning:LL_DELTA_UPDATE_DROPS_DATERANGES"));
+  assert.ok(ll(simCodes({ faults: { noBlockingReload: true } })).includes("warning:LL_NO_BLOCKING_RELOAD"));
+  const clean = ll(simCodes({}));
+  for (const code of ["LL_PART_HOLD_BACK_TOO_SMALL", "LL_DELTA_UPDATE_DROPS_DATERANGES", "LL_NO_BLOCKING_RELOAD"]) {
+    assert.ok(!clean.some((c) => c.includes(code)), `${code} fired on a clean run`);
+  }
+});
+
+test("a standard-latency run of the same chain has no low-latency findings", () => {
+  assert.deepEqual(ll(simCodes({ lowLatency: false })), []);
+});

@@ -25,6 +25,23 @@ export interface PackagerFaults {
 
 export interface PackagerSpec {
   markerStyle: MarkerStyle;
+  /**
+   * Publish partial segments. The packager is then making a second promise
+   * beyond "these segments exist": that clients may sit a part-target away
+   * from the edge and it can keep them fed there.
+   */
+  lowLatency?: {
+    partSeconds: number;
+    /** Defaults to three part durations, which is the specification floor. */
+    partHoldBack?: number;
+    canBlockReload?: boolean;
+    /** Offer delta updates from this far back. */
+    canSkipUntil?: number;
+    /** Whether those delta updates keep EXT-X-DATERANGE. */
+    canSkipDateRanges?: boolean;
+    preloadHint?: boolean;
+    renditionReport?: boolean;
+  };
   faults?: PackagerFaults;
   /** Renditions for the master playlist. */
   variants?: { name: string; bandwidth: number; resolution: string }[];
@@ -58,6 +75,7 @@ export interface RenderOptions {
   discontinuitySequence: number;
   targetDuration: number;
   endList?: boolean;
+  lowLatency?: PackagerSpec["lowLatency"];
   /** Write a PDT on every segment rather than only after a discontinuity. */
   pdtEverySegment?: boolean;
 }
@@ -70,13 +88,28 @@ export interface RenderOptions {
  * on every segment mostly makes the manifest harder to read.
  */
 export function renderPlaylist(segments: OutSegment[], o: RenderOptions): string {
+  const ll = o.lowLatency;
   const lines = [
     "#EXTM3U",
-    "#EXT-X-VERSION:6",
+    `#EXT-X-VERSION:${ll ? 9 : 6}`,
     `#EXT-X-TARGETDURATION:${o.targetDuration}`,
+  ];
+  if (ll) {
+    lines.push(`#EXT-X-PART-INF:PART-TARGET=${ll.partSeconds.toFixed(5)}`);
+    const control = [
+      `CAN-BLOCK-RELOAD=${ll.canBlockReload === false ? "NO" : "YES"}`,
+      `PART-HOLD-BACK=${(ll.partHoldBack ?? ll.partSeconds * 3).toFixed(5)}`,
+    ];
+    if (ll.canSkipUntil !== undefined) {
+      control.push(`CAN-SKIP-UNTIL=${ll.canSkipUntil.toFixed(1)}`);
+      if (ll.canSkipDateRanges) control.push("CAN-SKIP-DATERANGES=YES");
+    }
+    lines.push(`#EXT-X-SERVER-CONTROL:${control.join(",")}`);
+  }
+  lines.push(
     `#EXT-X-MEDIA-SEQUENCE:${o.mediaSequence}`,
     `#EXT-X-DISCONTINUITY-SEQUENCE:${o.discontinuitySequence}`,
-  ];
+  );
   let pendingPdt = true;
   for (const seg of segments) {
     if (seg.discontinuity) {
@@ -88,8 +121,32 @@ export function renderPlaylist(segments: OutSegment[], o: RenderOptions): string
       lines.push(`#EXT-X-PROGRAM-DATE-TIME:${iso(seg.pdtMs)}`);
       pendingPdt = false;
     }
+    // The newest segment is the one published as parts; everything older is
+    // already complete, which is what a real low-latency playlist looks like.
+    const last = seg === segments[segments.length - 1];
+    if (ll && last) {
+      const count = Math.max(1, Math.round(seg.durationSec / ll.partSeconds));
+      for (let i = 0; i < count; i++) {
+        const d = Math.min(ll.partSeconds, seg.durationSec - i * ll.partSeconds);
+        lines.push(
+          `#EXT-X-PART:DURATION=${d.toFixed(5)},URI="${seg.uri.replace(/\.ts$/, "")}.${i}.ts"` +
+            (i === 0 ? ",INDEPENDENT=YES" : ""),
+        );
+      }
+    }
     lines.push(`#EXTINF:${fmt(seg.durationSec)},`);
     lines.push(seg.uri);
+  }
+  if (ll) {
+    const nextSeq = o.mediaSequence + segments.length;
+    if (ll.preloadHint !== false) {
+      lines.push(`#EXT-X-PRELOAD-HINT:TYPE=PART,URI="content_${String(nextSeq).padStart(5, "0")}.0.ts"`);
+    }
+    if (ll.renditionReport !== false) {
+      lines.push(
+        `#EXT-X-RENDITION-REPORT:URI="../720p/index.m3u8",LAST-MSN=${nextSeq - 1},LAST-PART=0`,
+      );
+    }
   }
   if (o.endList) lines.push("#EXT-X-ENDLIST");
   return lines.join("\n") + "\n";
@@ -182,6 +239,7 @@ export function writeMediaPlaylist(
     discontinuitySequence,
     targetDuration: Math.ceil(tl.spec.segmentSeconds),
     endList: opts.endList,
+    lowLatency: pkg.lowLatency,
   });
 
   return { segments: slice, text, uri: opts.uri ?? "index.m3u8" };

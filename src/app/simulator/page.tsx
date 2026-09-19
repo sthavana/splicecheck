@@ -59,10 +59,20 @@ const FAULTS: Fault[] = [
   { key: "availNeverReturns", label: "Avail never returns", blurb: "The ad Period keeps growing past the duration it declared.", stage: "SSAI", requires: { protocol: "dash", adMode: "ssai" } },
   { key: "periodGap", label: "Gap between Periods", blurb: "The next Period starts later than the previous one ended.", stage: "SSAI", requires: { protocol: "dash", adMode: "ssai" } },
   { key: "dropPresentationTimeOffset", label: "Drop @presentationTimeOffset", blurb: "Segment numbering no longer maps to the presentation timeline.", stage: "Packaging", requires: { protocol: "dash" } },
+  { key: "partHoldBackTooSmall", label: "Hold-back under the floor", blurb: "Clients sit closer to live than the packager can sustain.", stage: "Packaging", requires: { protocol: "hls" } },
+  { key: "deltaUpdateDropsDateRanges", label: "Delta updates drop DATERANGE", blurb: "The break exists for some viewers and not others.", stage: "Packaging", requires: { protocol: "hls" } },
+  { key: "noBlockingReload", label: "No blocking reload", blurb: "The latency the parts bought is spent polling.", stage: "Packaging", requires: { protocol: "hls" } },
   { key: "adBlocked", label: "Ad request blocked", blurb: "A blocklist stops the call before it leaves the device.", stage: "CSAI", requires: { adMode: "csai" } },
   { key: "adServerTimeout", label: "Ad server times out", blurb: "No response inside the playback deadline.", stage: "CSAI", requires: { adMode: "csai" } },
   { key: "creativeFailsToLoad", label: "Creative fails to load", blurb: "The auction is won and the CDN does not deliver.", stage: "CSAI", requires: { adMode: "csai" } },
 ];
+
+/** Faults that only exist once partial segments are being published. */
+const LOW_LATENCY_FAULTS = new Set([
+  "partHoldBackTooSmall",
+  "deltaUpdateDropsDateRanges",
+  "noBlockingReload",
+]);
 
 const EVENT_STYLE: Record<ClientEvent["kind"], string> = {
   content: "border-edge bg-raise text-muted",
@@ -165,6 +175,7 @@ export default function SimulatorPage() {
   const [markerStyle, setMarkerStyle] = useState<"both" | "daterange" | "cue-out">("both");
   const [stitchMode, setStitchMode] = useState("fill");
   const [protocol, setProtocol] = useState<"hls" | "dash">("hls");
+  const [lowLatency, setLowLatency] = useState(false);
   const [adMode, setAdMode] = useState<"ssai" | "csai">("ssai");
   const [faults, setFaults] = useState<Record<string, boolean>>({});
   const [stage, setStage] = useState<Stage["id"]>("packager");
@@ -177,6 +188,7 @@ export default function SimulatorPage() {
     stitchMode,
     protocol,
     adMode,
+    lowLatency,
     faults: {
       ...Object.fromEntries(Object.entries(faults).filter(([k, v]) => v && k !== "untranscribedAvail")),
       ...(faults.untranscribedAvail ? { untranscribedAvail: 1001 } : {}),
@@ -258,6 +270,17 @@ export default function SimulatorPage() {
               <option value="dash">DASH</option>
             </select>
           </Field>
+          <Field label="Latency">
+            <select
+              className={SELECT}
+              value={lowLatency ? "low" : "standard"}
+              disabled={protocol === "dash"}
+              onChange={(e) => setLowLatency(e.target.value === "low")}
+            >
+              <option value="standard">Standard — whole segments</option>
+              <option value="low">Low latency — partial segments</option>
+            </select>
+          </Field>
           <Field label="Ad insertion">
             <select className={SELECT} value={adMode} onChange={(e) => setAdMode(e.target.value as never)}>
               <option value="ssai">Server-side — the manifest is rewritten</option>
@@ -307,7 +330,8 @@ export default function SimulatorPage() {
             {FAULTS.filter(
               (f) =>
                 (!f.requires?.protocol || f.requires.protocol === protocol) &&
-                (!f.requires?.adMode || f.requires.adMode === adMode),
+                (!f.requires?.adMode || f.requires.adMode === adMode) &&
+                (!LOW_LATENCY_FAULTS.has(f.key) || lowLatency),
             ).map((f) => (
               <label key={f.key} className="flex cursor-pointer items-start gap-2.5 rounded-md p-1.5 hover:bg-raise">
                 <input
