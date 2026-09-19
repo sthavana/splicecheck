@@ -233,6 +233,87 @@ export function analyzeRendition(
     ? (segs[segs.length - 1].pdt ?? 0) + segs[segs.length - 1].duration * 1000
     : undefined;
 
+  // ---- low latency --------------------------------------------------------
+  // Parts change what the numbers in this playlist mean. A player is no longer
+  // sitting three segments behind the edge; it is sitting PART-HOLD-BACK
+  // behind it, which is usually about a second. Everything an ad decision has
+  // to do must fit inside that.
+  if (playlist.lowLatency) {
+    const sc = playlist.serverControl;
+    const partTarget = playlist.partTargetDuration;
+
+    if (!sc) {
+      add(
+        "error",
+        "LL_NO_SERVER_CONTROL",
+        "Parts are published but EXT-X-SERVER-CONTROL is missing",
+        "The playlist offers partial segments without telling clients how to consume them. Without CAN-BLOCK-RELOAD a player has to poll, and without PART-HOLD-BACK it does not know how close to the edge it may sit — so it falls back to segment-level behaviour and the parts buy nothing.",
+      );
+    } else {
+      if (!sc.canBlockReload) {
+        add(
+          "warning",
+          "LL_NO_BLOCKING_RELOAD",
+          "Parts are published but CAN-BLOCK-RELOAD is not YES",
+          "Blocking playlist reload is what lets a client ask for the next part and be answered the moment it exists. Without it the client polls, and the latency saved by publishing parts is spent again waiting for the next poll.",
+        );
+      }
+
+      // RFC 8216bis: PART-HOLD-BACK must be at least three part durations.
+      // Below that a client cannot reliably keep its buffer fed.
+      if (sc.partHoldBack !== undefined && partTarget !== undefined) {
+        const floor = partTarget * 3;
+        if (sc.partHoldBack < floor - 0.001) {
+          add(
+            "error",
+            "LL_PART_HOLD_BACK_TOO_SMALL",
+            `PART-HOLD-BACK is ${fmt(sc.partHoldBack)}s against a ${fmt(partTarget)}s part target`,
+            `The specification requires PART-HOLD-BACK to be at least three times PART-TARGET — ${fmt(floor)}s here. A smaller value puts clients closer to the live edge than the publishing cadence can sustain, so they run out of parts and rebuffer. This is the most common cause of a low-latency stream that is unwatchable rather than merely late.`,
+          );
+        }
+      }
+
+      // A delta update that drops DATERANGE takes the ad signalling with it.
+      if (sc.canSkipUntil !== undefined && !sc.canSkipDateRanges) {
+        add(
+          "warning",
+          "LL_DELTA_UPDATE_DROPS_DATERANGES",
+          "Playlist delta updates are offered but do not carry EXT-X-DATERANGE",
+          "CAN-SKIP-UNTIL tells clients they may request a delta update, and without CAN-SKIP-DATERANGES=YES those updates omit the DATERANGE tags along with the skipped segments. A client using delta updates — which on a low-latency stream is most of them — stops seeing the ad signalling entirely, while a client doing full reloads sees it. The break exists for some viewers and not others.",
+        );
+      }
+    }
+
+    if (playlist.parts.length > 0 && !playlist.preloadHint) {
+      add(
+        "info",
+        "LL_NO_PRELOAD_HINT",
+        "Parts are published without an EXT-X-PRELOAD-HINT",
+        "A preload hint names the part that does not exist yet, so a client can have the request already open when it is published. Without it the client learns of each part only on the next playlist reload, which adds a round trip per part.",
+      );
+    }
+
+    if (playlist.parts.length > 0 && playlist.renditionReports.length === 0) {
+      add(
+        "info",
+        "LL_NO_RENDITION_REPORT",
+        "No EXT-X-RENDITION-REPORT for the other renditions",
+        "A client switching bitrate has to discover where the other rendition has got to, which at low latency means a blind request and usually a visible stall at the switch. Rendition reports let it switch straight to the right part — and a bitrate switch inside an ad break is exactly when this happens.",
+      );
+    }
+
+    // The decision budget, stated rather than judged: this is the number an ad
+    // decision has to fit inside, and most people are surprised by it.
+    if (sc?.partHoldBack !== undefined && playlist.markers.length > 0) {
+      add(
+        "info",
+        "LL_AD_DECISION_BUDGET",
+        `An ad decision here has about ${fmt(sc.partHoldBack)}s to complete`,
+        `Players are told to sit ${fmt(sc.partHoldBack)}s behind the live edge. A cue that arrives at the splice point leaves an ad decision service that long to call out, select a pod and have creatives ready. Lead time is the property that decides whether a low-latency stream can carry advertising at all, and it is not in any tag — it is the gap between when the cue appears in the manifest and when the splice happens.`,
+      );
+    }
+  }
+
   // ---- structural checks -------------------------------------------------
   if (playlist.targetDuration) {
     for (const s of segs) {

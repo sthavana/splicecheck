@@ -60,6 +60,14 @@ export interface DashAdaptationSet {
   segments: DashSegmentEntry[];
   /** SegmentTemplate@duration, for streams addressed by number rather than time */
   segmentDuration?: number;
+  /**
+   * Seconds earlier than nominal that a segment becomes available. Non-zero
+   * means the packager publishes it while it is still being written, which is
+   * how DASH does low latency.
+   */
+  availabilityTimeOffset?: number;
+  /** false means the segment is published before it is complete. */
+  availabilityTimeComplete?: boolean;
   /** whether a SegmentTimeline was present at all */
   usesTimeline: boolean;
   supplementalProperties: string[];
@@ -113,6 +121,18 @@ export interface DashPeriod {
   isPlaceholder: boolean;
 }
 
+/**
+ * ServiceDescription/Latency. Where LL-HLS states the contract in
+ * EXT-X-SERVER-CONTROL, DASH states it here: how far behind live the packager
+ * intends players to sit, and how far it will let them drift.
+ */
+export interface DashLatency {
+  targetMs?: number;
+  minMs?: number;
+  maxMs?: number;
+  referenceId?: number;
+}
+
 export interface MpdDocument {
   uri: string;
   type: "static" | "dynamic";
@@ -121,6 +141,10 @@ export interface MpdDocument {
   publishTime?: number;
   minimumUpdatePeriod?: number;
   timeShiftBufferDepth?: number;
+  /** ServiceDescription latency, where the manifest declares one. */
+  latency?: DashLatency;
+  /** Any adaptation set publishing segments before they are complete. */
+  chunked: boolean;
   suggestedPresentationDelay?: number;
   minBufferTime?: number;
   mediaPresentationDuration?: number;
@@ -273,12 +297,17 @@ function parseSegmentTiming(as: Record<string, unknown>): {
   entries: DashSegmentEntry[];
   segmentDuration?: number;
   usesTimeline: boolean;
+  ato?: number;
+  atComplete?: boolean;
 } {
   const tpl = (child(as, "SegmentTemplate") ?? child(as, "SegmentList")) as
     | Record<string, unknown>
     | undefined;
   if (!tpl) return { timescale: 1, pto: 0, duration: 0, count: 0, startNumber: 1, entries: [], usesTimeline: false };
   const timescale = num(pick(tpl, "timescale")) ?? 1;
+  const ato = num(pick(tpl, "availabilityTimeOffset"));
+  const atCompleteRaw = pick(tpl, "availabilityTimeComplete");
+  const atComplete = atCompleteRaw === undefined ? undefined : String(atCompleteRaw) !== "false";
   const pto = num(pick(tpl, "presentationTimeOffset")) ?? 0;
   const media = pick(tpl, "media") !== undefined ? String(pick(tpl, "media")) : undefined;
   const init = pick(tpl, "initialization") !== undefined ? String(pick(tpl, "initialization")) : undefined;
@@ -309,7 +338,7 @@ function parseSegmentTiming(as: Record<string, unknown>): {
       number += reps;
       if (cursor !== undefined) cursor += d * reps;
     }
-    return { timescale, pto, first, duration: total / timescale, count, media, init, startNumber, entries, usesTimeline: true };
+    return { timescale, pto, first, duration: total / timescale, count, media, init, startNumber, entries, usesTimeline: true, ato, atComplete };
   }
 
   // SegmentTemplate with @duration and no timeline: segments are uniform, and
@@ -318,10 +347,10 @@ function parseSegmentTiming(as: Record<string, unknown>): {
   if (d !== undefined) {
     return {
       timescale, pto, first: pto, duration: 0, count: 0, media, init, startNumber,
-      entries: [], segmentDuration: d, usesTimeline: false,
+      entries: [], segmentDuration: d, usesTimeline: false, ato, atComplete,
     };
   }
-  return { timescale, pto, duration: 0, count: 0, media, init, startNumber, entries: [], usesTimeline: false };
+  return { timescale, pto, duration: 0, count: 0, media, init, startNumber, entries: [], usesTimeline: false , ato, atComplete };
 }
 
 export function parseMpd(text: string, uri: string): MpdDocument {
@@ -385,6 +414,8 @@ export function parseMpd(text: string, uri: string): MpdDocument {
         supplementalProperties: schemeList(as, "SupplementalProperty"),
         essentialProperties: schemeList(as, "EssentialProperty"),
         inbandEventSchemes: schemeList(as, "InbandEventStream"),
+        availabilityTimeOffset: timing.ato,
+        availabilityTimeComplete: timing.atComplete,
       };
     });
 
@@ -469,8 +500,30 @@ export function parseMpd(text: string, uri: string): MpdDocument {
     p.mediaDuration = next ? Math.max(0, next.start - p.start) : 0;
   });
 
+  // ServiceDescription is where DASH states its latency contract.
+  let latency: DashLatency | undefined;
+  for (const sd of arr(child(mpd, "ServiceDescription") as Record<string, unknown>[] | undefined)) {
+    const l = child(sd, "Latency") as Record<string, unknown> | undefined;
+    if (!l) continue;
+    latency = {
+      targetMs: num(pick(l, "target")),
+      minMs: num(pick(l, "min")),
+      maxMs: num(pick(l, "max")),
+      referenceId: num(pick(l, "referenceId")),
+    };
+    break;
+  }
+
+  const chunked = periods.some((p) =>
+    p.adaptationSets.some(
+      (a) => a.availabilityTimeComplete === false || (a.availabilityTimeOffset ?? 0) > 0,
+    ),
+  );
+
   return {
     uri,
+    latency,
+    chunked,
     type: String(pick(mpd, "type") ?? "static") === "dynamic" ? "dynamic" : "static",
     profiles: pick(mpd, "profiles") ? String(pick(mpd, "profiles")) : undefined,
     availabilityStartTime: Number.isNaN(availabilityStartTime) ? undefined : availabilityStartTime,

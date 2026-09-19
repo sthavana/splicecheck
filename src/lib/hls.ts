@@ -47,6 +47,35 @@ export interface HlsMarker {
   attrs: Record<string, string>;
 }
 
+/** One EXT-X-PART: a fragment published before its parent segment is complete. */
+export interface HlsPart {
+  uri: string;
+  duration: number;
+  /** Starts with an independent frame, so a player can join on it. */
+  independent: boolean;
+  /** Media sequence of the segment this part belongs to. */
+  segmentMsn: number;
+  index: number;
+  gap: boolean;
+  lineNumber: number;
+}
+
+/**
+ * EXT-X-SERVER-CONTROL. The contract between playlist and client about how
+ * close to live a player may sit and how it should ask for updates.
+ */
+export interface ServerControl {
+  canBlockReload: boolean;
+  /** Seconds a player must stay behind the live edge when playing parts. */
+  partHoldBack?: number;
+  /** The same, for a player playing whole segments. */
+  holdBack?: number;
+  /** Playlist delta updates are offered from this far back. */
+  canSkipUntil?: number;
+  /** Whether a delta update keeps EXT-X-DATERANGE tags. */
+  canSkipDateRanges: boolean;
+}
+
 export interface MediaPlaylist {
   type: "media";
   uri: string;
@@ -58,6 +87,14 @@ export interface MediaPlaylist {
   playlistType?: string;
   partTargetDuration?: number;
   lowLatency: boolean;
+  parts: HlsPart[];
+  serverControl?: ServerControl;
+  /** EXT-X-PRELOAD-HINT for the part not yet published. */
+  preloadHint?: { type: string; uri: string };
+  /** EXT-X-RENDITION-REPORT, so a switching player need not start over. */
+  renditionReports: { uri: string; lastMsn?: number; lastPart?: number }[];
+  /** EXT-X-SKIP: this is a delta update with segments omitted. */
+  skippedSegments?: number;
   segments: HlsSegment[];
   markers: HlsMarker[];
   totalDuration: number;
@@ -157,6 +194,12 @@ export function parseMedia(text: string, uri: string): MediaPlaylist {
   let discontinuitySequence = 0;
   let targetDuration: number | undefined;
   let partTargetDuration: number | undefined;
+  const parts: HlsPart[] = [];
+  const renditionReports: { uri: string; lastMsn?: number; lastPart?: number }[] = [];
+  let serverControl: ServerControl | undefined;
+  let preloadHint: { type: string; uri: string } | undefined;
+  let skippedSegments: number | undefined;
+  let partIndex = 0;
   let version: number | undefined;
   let playlistType: string | undefined;
   let endList = false;
@@ -247,8 +290,43 @@ export function parseMedia(text: string, uri: string): MediaPlaylist {
       const a = parseAttributes(line.slice("#EXT-X-PART-INF:".length));
       partTargetDuration = a["PART-TARGET"] ? Number(a["PART-TARGET"]) : undefined;
       lowLatency = true;
-    } else if (line.startsWith("#EXT-X-PART:") || line.startsWith("#EXT-X-PRELOAD-HINT:") || line.startsWith("#EXT-X-SERVER-CONTROL:")) {
+    } else if (line.startsWith("#EXT-X-PART:")) {
+      const a = parseAttributes(line.slice("#EXT-X-PART:".length));
       lowLatency = true;
+      parts.push({
+        uri: a.URI ?? "",
+        duration: a.DURATION ? Number(a.DURATION) : 0,
+        independent: a.INDEPENDENT === "YES",
+        // Parts appear before the EXTINF of the segment they belong to.
+        segmentMsn: mediaSequence + segments.length,
+        index: partIndex++,
+        gap: a.GAP === "YES",
+        lineNumber: ln,
+      });
+    } else if (line.startsWith("#EXT-X-PRELOAD-HINT:")) {
+      const a = parseAttributes(line.slice("#EXT-X-PRELOAD-HINT:".length));
+      lowLatency = true;
+      preloadHint = { type: a.TYPE ?? "PART", uri: a.URI ?? "" };
+    } else if (line.startsWith("#EXT-X-SERVER-CONTROL:")) {
+      const a = parseAttributes(line.slice("#EXT-X-SERVER-CONTROL:".length));
+      lowLatency = true;
+      serverControl = {
+        canBlockReload: a["CAN-BLOCK-RELOAD"] === "YES",
+        partHoldBack: a["PART-HOLD-BACK"] ? Number(a["PART-HOLD-BACK"]) : undefined,
+        holdBack: a["HOLD-BACK"] ? Number(a["HOLD-BACK"]) : undefined,
+        canSkipUntil: a["CAN-SKIP-UNTIL"] ? Number(a["CAN-SKIP-UNTIL"]) : undefined,
+        canSkipDateRanges: a["CAN-SKIP-DATERANGES"] === "YES",
+      };
+    } else if (line.startsWith("#EXT-X-RENDITION-REPORT:")) {
+      const a = parseAttributes(line.slice("#EXT-X-RENDITION-REPORT:".length));
+      renditionReports.push({
+        uri: a.URI ?? "",
+        lastMsn: a["LAST-MSN"] ? Number(a["LAST-MSN"]) : undefined,
+        lastPart: a["LAST-PART"] ? Number(a["LAST-PART"]) : undefined,
+      });
+    } else if (line.startsWith("#EXT-X-SKIP:")) {
+      const a = parseAttributes(line.slice("#EXT-X-SKIP:".length));
+      skippedSegments = a["SKIPPED-SEGMENTS"] ? Number(a["SKIPPED-SEGMENTS"]) : undefined;
     } else if (line.startsWith("#EXT-X-CUE-OUT-CONT")) {
       const body = line.includes(":") ? line.slice(line.indexOf(":") + 1) : "";
       const attrs = parseAttributes(body);
@@ -340,6 +418,11 @@ export function parseMedia(text: string, uri: string): MediaPlaylist {
     playlistType,
     partTargetDuration,
     lowLatency,
+    parts,
+    serverControl,
+    preloadHint,
+    renditionReports,
+    skippedSegments,
     segments,
     markers,
     totalDuration: cumulative,

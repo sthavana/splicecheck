@@ -118,6 +118,84 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
     add("error", "NO_PERIODS", "MPD contains no Periods", "There is nothing to analyse.");
   }
 
+  // ---- low latency --------------------------------------------------------
+  // Where LL-HLS states its contract in EXT-X-SERVER-CONTROL, DASH splits it
+  // between ServiceDescription/Latency and the availability attributes on the
+  // SegmentTemplate. The two have to agree, and a target that the segmentation
+  // cannot deliver is the usual reason a "low latency" stream is not one.
+  if (mpd.chunked || mpd.latency) {
+    const target = mpd.latency?.targetMs !== undefined ? mpd.latency.targetMs / 1000 : undefined;
+
+    // The longest segment in play, in seconds.
+    let segSec = 0;
+    for (const p of periods) {
+      for (const a of p.adaptationSets) {
+        const ts = a.timescale || 1;
+        const d = a.segmentDuration !== undefined ? a.segmentDuration / ts : a.segments[0] ? a.segments[0].d / ts : undefined;
+        if (d) segSec = Math.max(segSec, d);
+      }
+    }
+
+    if (mpd.chunked && target === undefined) {
+      add(
+        "warning",
+        "LL_DASH_NO_LATENCY_TARGET",
+        "Segments are published before they are complete, but no latency target is declared",
+        "availabilityTimeComplete=\"false\" tells clients they may fetch a segment while it is still being written, which is how DASH delivers low latency. Without a ServiceDescription/Latency target, nothing tells them how close to live to sit — so each player vendor picks its own, and the same stream runs at two seconds on one device and eight on another.",
+      );
+    }
+
+    // A target shorter than a segment is only reachable if the segment can be
+    // consumed while it is being written.
+    if (target !== undefined && segSec > 0 && target < segSec && !mpd.chunked) {
+      add(
+        "error",
+        "LL_DASH_TARGET_UNREACHABLE",
+        `A ${fmt(target)}s latency target is declared with ${fmt(segSec)}s segments and no chunked delivery`,
+        `A client cannot be less than one segment behind live unless it can start consuming a segment before that segment is finished. With availabilityTimeComplete unset, the earliest a ${fmt(segSec)}s segment can be fetched is after it has been written — so the floor is ${fmt(segSec)}s, above the ${fmt(target)}s being asked for. Players either sit further back than the manifest says, or chase the edge and rebuffer.`,
+      );
+    }
+
+    if (target !== undefined && mpd.suggestedPresentationDelay !== undefined) {
+      const spd = mpd.suggestedPresentationDelay;
+      if (Math.abs(spd - target) > 1) {
+        add(
+          "warning",
+          "LL_DASH_DELAY_DISAGREEMENT",
+          `@suggestedPresentationDelay is ${fmt(spd)}s but the latency target is ${fmt(target)}s`,
+          "The manifest states two different live points. Players that honour ServiceDescription sit at one, players that honour suggestedPresentationDelay sit at the other, and the two are watching the same moment several seconds apart. For ad insertion that means a cue reaches them at different times, and any decision made against wall clock is right for one group and late for the other.",
+        );
+      }
+    }
+
+    // Publishing early is only coherent if the segment is incomplete.
+    for (const p of periods) {
+      for (const a of p.adaptationSets) {
+        const ts = a.timescale || 1;
+        const d = a.segmentDuration !== undefined ? a.segmentDuration / ts : a.segments[0] ? a.segments[0].d / ts : undefined;
+        const ato = a.availabilityTimeOffset;
+        if (ato !== undefined && ato > 0 && a.availabilityTimeComplete !== false && d && ato > d / 2) {
+          add(
+            "warning",
+            "LL_DASH_EARLY_AVAILABILITY_WITHOUT_CHUNKING",
+            `Period ${p.id ?? p.index} offers segments ${fmt(ato)}s early but does not mark them incomplete`,
+            `availabilityTimeOffset=${fmt(ato)} says a ${fmt(d)}s segment may be fetched well before its nominal availability, while availabilityTimeComplete is left at its default of true — which claims the whole segment already exists. A client taking the manifest at its word requests a segment that is still being written and gets a truncated response or a 404. Chunked delivery needs availabilityTimeComplete="false" as well as the offset.`,
+            { atTime: p.start },
+          );
+        }
+      }
+    }
+
+    if (target !== undefined && periods.some((p) => p.events.length > 0)) {
+      add(
+        "info",
+        "LL_AD_DECISION_BUDGET",
+        `An ad decision here has about ${fmt(target)}s to complete`,
+        `Players are told to sit ${fmt(target)}s behind the live edge. That is the whole budget for an ad decision that is triggered by a cue arriving at the splice point: call out, run the auction, pick the pod, have the creatives ready. Lead time is what decides whether a low-latency stream can carry advertising, and it appears in no tag — it is the gap between the cue reaching the manifest and the splice happening.`,
+      );
+    }
+  }
+
   const ids = new Map<string, number>();
   for (const p of periods) {
     if (p.id === undefined) {
