@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { analyzeText } from "../src/lib/runner";
 import { analyzeCrossVariant } from "../src/lib/analyze";
+import { comparePipeline } from "../src/lib/pipeline";
 
 function codes(text: string): Set<string> {
   const r = analyzeText(text, "fixture");
@@ -398,4 +399,60 @@ test("a window that opens part-way through a break is not judged on length", () 
 #EXT-X-PROGRAM-DATE-TIME:2026-01-01T00:04:00.000Z
 ${more(15, "g")}`;
   assert.ok(!severityCodes(clipped).some((c) => c.includes("BREAK_OVERRUN_UNCLOSED")));
+});
+
+/* --------------------------------------------------- getting it off the screen --
+ * A finding is only worth having if it can reach whoever runs the packager.
+ * The report has to carry the codes, the locations and — the part people
+ * forget — what was checked, so that finding nothing means something.
+ */
+
+import { analysisToMarkdown, comparisonToMarkdown, reportFilename } from "../src/lib/report";
+
+const LIVE = readFileSync("fixtures/broken.m3u8", "utf8");
+
+test("a report states what was checked, not only what was found", () => {
+  const md = analysisToMarkdown(analyzeText(LIVE, "https://origin.example/live/index.m3u8"));
+  assert.match(md, /# Ad signalling report/);
+  assert.match(md, /\*\*Source:\*\* `https:\/\/origin\.example\/live\/index\.m3u8`/);
+  assert.match(md, /## What was checked/);
+  assert.match(md, /rendition\(s\)/);
+  assert.match(md, /ad break\(s\) reconstructed/);
+  // Absence of a segment probe has to be stated, or a clean report overclaims.
+  assert.match(md, /Segments were not opened/);
+});
+
+test("every finding reaches the report with its code and location", () => {
+  const r = analyzeText(LIVE, "https://origin.example/live/index.m3u8");
+  const md = analysisToMarkdown(r);
+  const all = [...r.crossFindings, ...r.renditions.flatMap((x) => x.findings)];
+  assert.ok(all.length > 0, "fixture must produce findings");
+  for (const f of all) {
+    assert.ok(md.includes(f.code), `${f.code} missing from the report`);
+  }
+  assert.match(md, /Codes are stable/);
+});
+
+test("a clean analysis says so rather than printing an empty heading", () => {
+  const clean = `#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PROGRAM-DATE-TIME:2026-01-01T00:00:00.000Z\n#EXTINF:6.0,\na.ts\n#EXTINF:6.0,\nb.ts\n#EXT-X-ENDLIST\n`;
+  const md = analysisToMarkdown(analyzeText(clean, "https://origin.example/vod.m3u8"));
+  assert.match(md, /None\. Everything checked above is as it should be\./);
+});
+
+test("a pipeline comparison exports its avails and its fill rate", () => {
+  const src = analyzeText(LIVE, "source");
+  const out = analyzeText(LIVE, "output");
+  const md = comparisonToMarkdown(comparePipeline(src, out));
+  assert.match(md, /# Pipeline comparison report/);
+  assert.match(md, /fill rate/i);
+  assert.match(md, /\| # \| Wall clock \| Status \|/);
+});
+
+test("report filenames are safe, sortable and do not collide", () => {
+  const at = Date.UTC(2026, 8, 19, 15, 4);
+  const a = reportFilename("https://origin.example/live/ch1/index.m3u8", "md", at);
+  assert.match(a, /^splicecheck-origin\.example-2026-09-19-15-04\.md$/);
+  // A pasted manifest has no URL to name it after.
+  assert.match(reportFilename("pasted manifest", "json", at), /^splicecheck-.*\.json$/);
+  assert.ok(!/[/\\:*?"<>|]/.test(reportFilename('https://x.example/a b?c="d"', "md", at)));
 });

@@ -9,6 +9,7 @@
 
 import { readFile } from "node:fs/promises";
 import { analyzeText, analyzeUrl, type RunResult } from "./lib/runner";
+import { analysisToMarkdown, comparisonToMarkdown } from "./lib/report";
 import { comparePipeline } from "./lib/pipeline";
 import { probeMpd, probeRendition, type SegmentProbe } from "./lib/segments";
 import { compareScte224, isScte224, parseScte224, type Scte224Comparison } from "./lib/scte224";
@@ -33,6 +34,7 @@ const SEV = {
 
 interface Options {
   json: boolean;
+  markdown: boolean;
   strict: boolean;
   quiet: boolean;
   variants?: number;
@@ -51,6 +53,7 @@ Usage
 
 Options
   --json             emit the full analysis as JSON
+  --markdown         emit a findings report as Markdown, for a ticket
   --strict           exit non-zero on warnings as well as errors
   --quiet            print findings only, no summary detail
   --variants <n>     maximum HLS renditions to fetch (default 6)
@@ -69,7 +72,7 @@ Exit codes
 }
 
 function parseArgs(argv: string[]): { cmd: string; targets: string[]; opts: Options } {
-  const opts: Options = { json: false, strict: false, quiet: false, segments: 0 };
+  const opts: Options = { json: false, markdown: false, strict: false, quiet: false, segments: 0 };
   const targets: string[] = [];
   let cmd = "analyse";
 
@@ -77,6 +80,7 @@ function parseArgs(argv: string[]): { cmd: string; targets: string[]; opts: Opti
     const a = argv[i];
     if (a === "-h" || a === "--help") usage();
     else if (a === "--json") opts.json = true;
+    else if (a === "--markdown" || a === "--md") opts.markdown = true;
     else if (a === "--strict") opts.strict = true;
     else if (a === "--quiet") opts.quiet = true;
     else if (a === "--variants") opts.variants = Number(argv[++i]);
@@ -220,7 +224,9 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
     policy = compareScte224(parseScte224(xml), first.breaks, { label: first.label });
   }
 
-  if (opts.json) {
+  if (opts.markdown) {
+    process.stdout.write(analysisToMarkdown({ ...r, probe }) + "\n");
+  } else if (opts.json) {
     process.stdout.write(JSON.stringify({ ...r, raw: undefined, probe, policy }, null, 2) + "\n");
   } else {
     const first = r.renditions[0];
@@ -270,7 +276,9 @@ async function runCompare(source: string, output: string, opts: Options): Promis
   const [src, out] = await Promise.all([load(source, opts), load(output, opts)]);
   const cmp = comparePipeline(src, out, { source: "source", stitched: "output" });
 
-  if (opts.json) {
+  if (opts.markdown) {
+    process.stdout.write(comparisonToMarkdown(cmp) + "\n");
+  } else if (opts.json) {
     process.stdout.write(JSON.stringify(cmp, null, 2) + "\n");
   } else {
     process.stdout.write(`\n${c.bold("source")} ${c.dim(cmp.source.uri)}\n`);

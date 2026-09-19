@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import type { AnalysisResult, AdBreak, Finding, Interstitial, PeriodSummary, RenditionAnalysis } from "@/lib/analyze";
+import { analysisToMarkdown, reportFilename } from "@/lib/report";
 import type { SegmentProbe } from "@/lib/segments";
 
 function PeriodTable({ periods }: { periods: PeriodSummary[] }) {
@@ -510,6 +511,64 @@ function XlinkPanel({ report }: { report: import("@/lib/xlink").XlinkReport }) {
   );
 }
 
+/**
+ * Getting the analysis off the screen.
+ *
+ * A finding is only worth having if it can reach whoever runs the packager.
+ * Markdown because it survives being pasted into a ticket; JSON because a
+ * build pipeline may want the same data without parsing prose.
+ */
+function ExportButtons({ result }: { result: AnalysisResult }) {
+  const [copied, setCopied] = useState(false);
+
+  function download(text: string, ext: string, type: string) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = reportFilename(result.sourceUri, ext);
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function copy() {
+    const md = analysisToMarkdown(result, { toolUrl: window.location.origin });
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked (insecure context, or permission denied): fall back
+      // to a download, which always works and delivers the same text.
+      download(md, "md", "text/markdown");
+    }
+  }
+
+  const btn =
+    "rounded-md border border-edge bg-panel px-2 py-1 text-[11px] text-soft transition-colors hover:bg-raise hover:text-foreground";
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      <button type="button" className={btn} onClick={copy}>
+        {copied ? "Copied" : "Copy report"}
+      </button>
+      <button
+        type="button"
+        className={btn}
+        onClick={() => download(analysisToMarkdown(result, { toolUrl: window.location.origin }), "md", "text/markdown")}
+      >
+        Markdown
+      </button>
+      <button
+        type="button"
+        className={btn}
+        onClick={() => download(JSON.stringify(result, null, 2), "json", "application/json")}
+      >
+        JSON
+      </button>
+    </div>
+  );
+}
+
 export default function Home() {
   const [url, setUrl] = useState("");
   const [paste, setPaste] = useState("");
@@ -712,6 +771,7 @@ export default function Home() {
                       : "No problems detected"}
                 </div>
                 <div className="mt-0.5 font-mono text-[11px] break-all text-muted">{result.sourceUri}</div>
+                <ExportButtons result={result} />
                 {result.recorded && (
                   <div className="mt-1 text-[11px] text-muted">
                     {result.recorded.synthetic
