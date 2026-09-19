@@ -177,7 +177,15 @@ function InterstitialTable({ interstitials }: { interstitials: Interstitial[] })
   );
 }
 
-const SAMPLES: { id?: string; label: string; url?: string; note: string; recorded?: boolean }[] = [
+const SAMPLES: {
+  id?: string;
+  label: string;
+  url?: string;
+  note: string;
+  recorded?: boolean;
+  /** Turn segment reading on for this one — it is the point of the sample. */
+  probe?: boolean;
+}[] = [
   {
     id: "multiperiod-dash",
     label: "Multi-period DASH",
@@ -197,9 +205,27 @@ const SAMPLES: { id?: string; label: string; url?: string; note: string; recorde
     recorded: true,
   },
   {
-    label: "Apple bipbop (live)",
+    label: "Live HLS, read the segments",
+    url: "https://demo.unified-streaming.com/k8s/live/scte35.isml/.m3u8",
+    note: "Opens the segments and decodes the SCTE-35 inside them. This feed's inband CRC does not validate — because the fault is in the signal the encoder emitted, not in the packager's transcription of it",
+    probe: true,
+  },
+  {
+    label: "On-demand HLS (MPEG-TS)",
+    url: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
+    note: "Segment reading is not a live-only feature. A finished asset is addressable end to end, so this walks PAT to PMT through real transport-stream segments and reports that no SCTE-35 stream is carried",
+    probe: true,
+  },
+  {
+    label: "On-demand DASH (CMAF)",
+    url: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.mpd",
+    note: "The same asset as fragmented MP4 — the reader walks the box tree looking for emsg instead, and finds none. The pair is the control: the reader ran and reported nothing, which is different from failing quietly",
+    probe: true,
+  },
+  {
+    label: "Apple bipbop",
     url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
-    note: "Control case — a stream with no ad signalling at all",
+    note: "On-demand, and a control case for the manifest rules — a stream with no ad signalling at all",
   },
 ];
 
@@ -452,7 +478,7 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [active, setActive] = useState(0);
 
-  async function run(overrideUrl?: string, sampleId?: string) {
+  async function run(overrideUrl?: string, sampleId?: string, forceProbe?: boolean) {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -465,7 +491,7 @@ export default function Home() {
           sampleId
             ? { sampleId }
             : mode === "url" || overrideUrl
-              ? { url: overrideUrl ?? url, probeSegments: readSegments ? 8 : 0 }
+              ? { url: overrideUrl ?? url, probeSegments: forceProbe || readSegments ? 8 : 0 }
               : { text: paste },
         ),
       });
@@ -590,7 +616,8 @@ export default function Home() {
               onClick={() => {
                 setMode("url");
                 setUrl(s.url ?? "");
-                run(s.url, s.id);
+                if (s.probe) setReadSegments(true);
+                run(s.url, s.id, s.probe);
               }}
               title={s.note}
               className="rounded border border-edge px-2 py-1 hover:border-accent hover:text-foreground"

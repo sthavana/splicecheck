@@ -491,6 +491,14 @@ export function resolveDashSegments(
 }
 
 /** Picks the segments worth opening: those an avail begins in, then a spread. */
+/** An even sample across the whole list, first and last included. */
+export function spread<T>(items: T[], n: number): T[] {
+  if (items.length <= n) return items;
+  if (n <= 1) return items.slice(0, Math.max(0, n));
+  const step = (items.length - 1) / (n - 1);
+  return Array.from({ length: n }, (_, i) => items[Math.round(i * step)]);
+}
+
 function chooseDashSegments(refs: DashSegmentRef[], breaks: AdBreak[], limit: number): DashSegmentRef[] {
   if (refs.length === 0) return [];
   const picked = new Map<number, DashSegmentRef>();
@@ -559,13 +567,27 @@ export async function probeMpd(
   }
 
   // A cue can sit in one segment out of thirty. Where the manifest carries no
-  // avails of its own there is nothing to aim at, so sampling a spread would
-  // most likely miss it — scan the window instead, within a budget.
+  // avails of its own there is nothing to aim at, so on a live window the whole
+  // window is scanned within a budget — the segments are seconds long, the
+  // window is minutes, and sampling a spread would most likely miss the cue.
+  //
+  // On-demand is the opposite case and must not be scanned the same way. The
+  // asset is addressable end to end rather than a sliding few minutes, its
+  // segments are routinely a megabyte each, and taking the last sixty means
+  // reading the end of the film. A spread across the whole asset is both
+  // cheaper and a better sample. Left unseparated, one on-demand probe pulled
+  // 26MB against a checkbox that promises a few.
   const manifestHasBreaks = rendition.breaks.length > 0;
-  const budget = manifestHasBreaks ? opts.maxSegments : Math.max(opts.maxSegments, Math.min(refs.length, 60));
+  const live = mpd.type === "dynamic";
+  const budget =
+    manifestHasBreaks || !live
+      ? opts.maxSegments
+      : Math.max(opts.maxSegments, Math.min(refs.length, 60));
   const chosen = manifestHasBreaks
     ? chooseDashSegments(refs, rendition.breaks, budget)
-    : refs.slice(-budget);
+    : live
+      ? refs.slice(-budget)
+      : spread(refs, budget);
   probe.available = refs.length;
   probe.attempted = chosen.length;
   const formats = new Set<string>();

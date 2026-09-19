@@ -265,3 +265,36 @@ test("agreement: a dropped cue is still an error when the manifest transcribes o
   );
   assert.ok(findings.some((x) => x.code === "INBAND_SIGNAL_NOT_IN_MANIFEST"));
 });
+
+/* --------------------------------------------- sampling an on-demand asset --
+ * A live window with no avails in it is scanned end to end, because a cue can
+ * sit in one segment out of thirty and the window is only minutes long. An
+ * on-demand asset cannot be treated the same way: it is addressable end to end,
+ * its segments are routinely a megabyte each, and taking the last sixty reads
+ * the end of the film. One probe pulled 26MB against a checkbox that promises
+ * a few before these were separated.
+ */
+
+import { spread } from "../src/lib/segments";
+
+test("a spread keeps both ends and stays inside the budget", () => {
+  const items = Array.from({ length: 600 }, (_, i) => i);
+  const picked = spread(items, 5);
+  assert.equal(picked.length, 5);
+  assert.equal(picked[0], 0, "the first segment is always sampled");
+  assert.equal(picked[picked.length - 1], 599, "and so is the last");
+  assert.deepEqual([...picked].sort((a, b) => a - b), picked, "in timeline order");
+});
+
+test("a spread is evenly distributed rather than clustered", () => {
+  const picked = spread(Array.from({ length: 600 }, (_, i) => i), 7);
+  const gaps = picked.slice(1).map((v, i) => v - picked[i]);
+  assert.ok(Math.max(...gaps) - Math.min(...gaps) <= 1, `gaps ${gaps.join(",")}`);
+});
+
+test("a spread never invents or duplicates segments", () => {
+  const items = [10, 20, 30];
+  assert.deepEqual(spread(items, 5), items, "fewer segments than the budget returns them all");
+  assert.deepEqual(spread(items, 3), items);
+  assert.equal(new Set(spread(Array.from({ length: 50 }, (_, i) => i), 12)).size, 12, "no duplicates");
+});
