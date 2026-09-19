@@ -640,7 +640,10 @@ export default function Home() {
           Point it at an HLS or DASH stream and it reconstructs every ad break, decodes the SCTE-35
           riding with it, and reports the conditions that make server-side ad insertion mis-fire —
           unclosed avails, duration disagreements, missing discontinuities, renditions that do not
-          splice at the same point, and periods that do not meet.
+          splice at the same point, and periods that do not meet. It will also open the segments and
+          check the cue in the media against the one in the manifest, resolve the remote Periods a
+          DASH manifest leaves for an ad service to fill, and hold a low-latency stream to the
+          contract it publishes.
         </p>
         </div>
 

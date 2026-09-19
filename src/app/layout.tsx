@@ -9,7 +9,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "SpliceCheck — ad-break inspector for HLS and DASH",
   description:
-    "Point it at a stream and see every ad break, the decoded SCTE-35 behind it, and what will break in server-side ad insertion.",
+    "Ad signalling in HLS and DASH, end to end: inspect a live stream, compare what goes into an ad-insertion service with what comes out, watch it continuously, or build a stream and break it on purpose.",
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },

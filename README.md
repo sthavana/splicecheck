@@ -2,10 +2,13 @@
 
 [![CI](https://github.com/sthavana/splicecheck/actions/workflows/ci.yml/badge.svg)](https://github.com/sthavana/splicecheck/actions/workflows/ci.yml)
 
-**Ad-break inspection for HLS and DASH.** Point it at a stream and it
-reconstructs every ad break, decodes the SCTE-35 riding with it, and reports the
-conditions that make server-side ad insertion mis-fire. Then it watches the
-stream and tells you when that changes.
+**Ad signalling in HLS and DASH, end to end.** Point it at a live stream and it
+reconstructs every ad break, decodes the SCTE-35 riding with it, reads the cues
+carried in the segments underneath, and reports the conditions that make
+server-side ad insertion mis-fire. Compare the feed going into an ad-insertion
+service with the output coming out. Watch a stream continuously and be told when
+any of that changes. Or build a stream through the whole chain and break it on
+purpose, to see what the rules catch.
 
 **Live demo: [splicecheck.vercel.app](https://splicecheck.vercel.app)** ·
 **Reference: [how ad insertion works](https://splicecheck.vercel.app/guide)** ·
@@ -15,7 +18,7 @@ stream and tells you when that changes.
 The interface follows the viewer's colour theme, and can be set to light or dark
 explicitly.
 
-Three parts, plus a CLI:
+Four tools, a CLI, and a report you can send someone:
 
 - **Inspector** (`/`) — a one-off look at any stream
 - **Pipeline comparison** (`/compare`) — the feed going *into* an ad-insertion
