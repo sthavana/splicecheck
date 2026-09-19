@@ -22,6 +22,8 @@ Three parts, plus a CLI:
   service against the stitched output coming *out* of it, to see which avails
   were actually filled
 - **Monitor** (`/monitors`) — polls on an interval and alerts on transitions
+- **Simulator** (`/simulator`) — builds a stream through the whole chain, so the
+  rules can be tested against faults whose ground truth is known
 - **CLI** — the same analysis in a terminal or a build pipeline
 
 > The hosted demo runs the inspector and the comparison in full. Continuous
@@ -350,10 +352,65 @@ noise goes away without blinding the tool.
 None of this was visible in the test suite until the behaviour was understood
 well enough to write a test for it. All six are now covered.
 
+## The simulator: building a stream to break it
+
+Everything above reads streams. Nothing writes one, which means every rule is
+tested against manifests whose ground truth is somebody else's guess. The
+simulator is the other direction — a synthetic channel run forward through the
+chain, then handed to the analyser that already exists.
+
+![The chain simulator: delivery and insertion mode, the encoder, packager, origin and SSAI stages, and eight faults to inject](docs/simulator.png)
+
+An encoder emits real SCTE-35, a packager transcribes it into HLS or DASH, an
+origin windows it, and an ad is inserted either server-side into the manifest or
+client-side in the player. Eleven faults can be switched on, each one a failure
+seen in the field rather than an arbitrary toggle.
+
+**The SCTE-35 is real, not a plausible-looking string.** `scte35Encode.ts` is
+the exact inverse of the decoder, and the tests hold the two against each other:
+every section must decode back to what went in with a valid CRC, and the
+published `splice_insert` vector is reproduced byte for byte through the command
+— `section_length` differs by exactly the 10-byte avail descriptor the vector
+carries and the simulator has no use for.
+
+![The SCTE-35 the encoder emits, with its command, PTS, duration and base64 payload](docs/simulator-encoder.png)
+
+**The manifests are generated, not canned.** The SSAI stage rewrites the
+window: ad segments in place of programme, a discontinuity per creative, and
+`EXT-X-CUE-OUT-CONT` counting the elapsed time through the break.
+
+![The stitched HLS output, ad segments replacing programme content inside the avail](docs/simulator-manifest.png)
+
+**And then it is graded by the same code that grades real streams.** Switch the
+ad service to under-fill and the inspector reports `BREAK_UNDERRUN` while the
+pipeline comparison — the same one behind `/compare` — calls the avail 67%
+filled.
+
+![Under-fill injected: the inspector reports BREAK_UNDERRUN and the comparison grades the avail under-filled at 67%](docs/simulator-fault.png)
+
+Writing it found four modelling errors, each caught by the analyser disagreeing
+with what the simulator claimed to have built: segments inside an avail were
+named differently from programme segments, which made a pass-through look like a
+real substitution; under-fill padded the break back to full length, so it
+measured as correctly filled; the ad service stitched breaks the packager had
+never transcribed, when a real one reads the manifest and cannot see them; and
+the DASH comparison ran against the HLS playlists.
+
+It also found a gap in the rules. A break left open past its own declared
+duration was only ever `info`, on the grounds that a break on air looks the same
+as one whose return was lost — but the declared duration is in the manifest and
+knowable from a single poll. `BREAK_OVERRUN_UNCLOSED` now fires past a margin of
+two target durations, in both HLS and DASH, where the DASH shape of the same
+fault is a Period that keeps growing with no later Period picking the programme
+back up.
+
+Every fault has a test that it fires, and — the half that matters more — that a
+clean run stays silent.
+
 ## Testing
 
 ```bash
-npm test      # 26 tests
+npm test      # 125 tests across 8 files
 ```
 
 - **Spec vectors** — the SCTE-35 decoder is asserted against published ANSI/SCTE
@@ -371,6 +428,13 @@ npm test      # 26 tests
   source/output pair, and a correctly stitched stream must produce *no findings
   whatsoever*. A tool that cannot stay silent on a healthy pipeline is useless
   on an unhealthy one.
+- **Round-tripped signalling** — every section the SCTE-35 encoder writes must
+  decode back through this project's own parser to what went in, with a valid
+  CRC. The two cannot drift apart without a test failing.
+- **The chain, end to end** — each fault the simulator can inject must produce
+  its finding, and a clean run must produce none. Both halves are asserted for
+  every fault, which is the only way a suppression can be distinguished from a
+  rule that stopped working.
 
 ## CLI
 

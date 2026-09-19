@@ -54,6 +54,47 @@ async function main() {
   await page.screenshot({ path: `${OUT}/pipeline-compare.png`, fullPage: false });
   console.log("captured pipeline-compare.png");
 
+  // --- simulator ---------------------------------------------------------
+  // The chain first, clean, with the stitched output on screen: this is the
+  // shot that shows the manifests are generated rather than canned.
+  await page.goto(`${BASE}/simulator`, { waitUntil: "networkidle" });
+  await page.waitForSelector("text=Chain simulator, text=Encoder", { timeout: 60_000 }).catch(() => {});
+  await page.getByRole("button", { name: /^SSAI/ }).click();
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${OUT}/simulator.png` });
+  console.log("captured simulator.png");
+
+  // The SCTE-35 the encoder emits, decoded back by this project's own parser.
+  await page.getByRole("button", { name: /^Encoder/ }).click();
+  await page.waitForSelector("text=SCTE-35 as the encoder emits it", { timeout: 20_000 });
+  await page.waitForTimeout(600);
+  await page
+    .locator("section", { hasText: "SCTE-35 as the encoder emits it" })
+    .first()
+    .screenshot({ path: `${OUT}/simulator-encoder.png` });
+  console.log("captured simulator-encoder.png");
+
+  // The stitched manifest, to show the output is generated rather than canned.
+  await page.getByRole("button", { name: /^SSAI/ }).click();
+  await page.waitForTimeout(900);
+  await page
+    .locator("section", { hasText: "SSAI output" })
+    .first()
+    .screenshot({ path: `${OUT}/simulator-manifest.png` });
+  console.log("captured simulator-manifest.png");
+
+  // A fault switched on and caught, which is the point of the whole thing.
+  // Under-fill is the one to show: it lands on the stitched output, so the
+  // finding and the comparison that grades it appear side by side. A fault
+  // belonging to the source manifest would leave this panel correctly empty.
+  await page.locator("select").nth(4).selectOption("under-fill");
+  await page.waitForTimeout(2500);
+  await page
+    .locator("section", { hasText: "The inspector on" })
+    .first()
+    .screenshot({ path: `${OUT}/simulator-fault.png` });
+  console.log("captured simulator-fault.png");
+
   // --- monitors ----------------------------------------------------------
   await page.goto(`${BASE}/monitors`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1500); // let the first poll render
