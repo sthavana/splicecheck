@@ -87,7 +87,13 @@ async function main() {
   // Under-fill is the one to show: it lands on the stitched output, so the
   // finding and the comparison that grades it appear side by side. A fault
   // belonging to the source manifest would leave this panel correctly empty.
-  await page.locator("select").nth(4).selectOption("under-fill");
+  // By label, not by index: adding a control to the page should not silently
+  // repoint this at a different one.
+  await page
+    .locator("label")
+    .filter({ hasText: "Ad service behaviour" })
+    .locator("select")
+    .selectOption("under-fill");
   await page.waitForTimeout(2500);
   await page
     .locator("section", { hasText: "The inspector on" })

@@ -4,6 +4,7 @@
 import { useState } from "react";
 import type { AvailComparison, AvailStatus, PipelineComparison } from "@/lib/pipeline";
 import type { Finding } from "@/lib/analyze";
+import { comparisonToMarkdown, reportFilename } from "@/lib/report";
 
 const STATUS: Record<AvailStatus, { label: string; chip: string; blurb: string }> = {
   filled: {
@@ -68,6 +69,60 @@ function FillBar({ a }: { a: AvailComparison }) {
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-raise">
       <div className={`h-full ${colour}`} style={{ width: `${Math.min(ratio, 1) * 100}%` }} />
+    </div>
+  );
+}
+
+/**
+ * The same escape hatch the inspector has. A fill rate is a number somebody
+ * has to argue about with a vendor, so it needs to leave the page with its
+ * working attached.
+ */
+function ExportButtons({ comparison }: { comparison: PipelineComparison }) {
+  const [copied, setCopied] = useState(false);
+
+  function download(text: string, ext: string, type: string) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = reportFilename(comparison.stitched.uri, ext);
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function copy() {
+    const md = comparisonToMarkdown(comparison, { toolUrl: window.location.origin });
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      download(md, "md", "text/markdown");
+    }
+  }
+
+  const btn =
+    "rounded-md border border-edge bg-panel px-2 py-1 text-[11px] text-soft transition-colors hover:bg-raise hover:text-foreground";
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      <button type="button" className={btn} onClick={copy}>
+        {copied ? "Copied" : "Copy report"}
+      </button>
+      <button
+        type="button"
+        className={btn}
+        onClick={() => download(comparisonToMarkdown(comparison, { toolUrl: window.location.origin }), "md", "text/markdown")}
+      >
+        Markdown
+      </button>
+      <button
+        type="button"
+        className={btn}
+        onClick={() => download(JSON.stringify(comparison, null, 2), "json", "application/json")}
+      >
+        JSON
+      </button>
     </div>
   );
 }
@@ -192,6 +247,7 @@ export default function Compare() {
                   signalled across {result.summary.signalled} avail
                   {result.summary.signalled === 1 ? "" : "s"}
                 </div>
+                <ExportButtons comparison={result} />
               </div>
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
                 <Count label="filled" n={result.summary.filled} tone="text-ok" />

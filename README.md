@@ -24,6 +24,8 @@ Three parts, plus a CLI:
 - **Monitor** (`/monitors`) — polls on an interval and alerts on transitions
 - **Simulator** (`/simulator`) — builds a stream through the whole chain, so the
   rules can be tested against faults whose ground truth is known
+- **Reports** — any result copies or downloads as Markdown for a ticket, or as
+  JSON for a pipeline
 - **CLI** — the same analysis in a terminal or a build pipeline
 
 > The hosted demo runs the inspector and the comparison in full. Continuous
@@ -290,6 +292,38 @@ they share: `VARIANT_BREAK_COUNT_MISMATCH`, `VARIANT_MISSING_BREAK`,
 | `EMPTY_PERIOD` | An avail was opened and never filled — what a failed ad decision looks like |
 | `MUP_LONGER_THAN_SHORTEST_BREAK` | An avail can begin and end between two MPD refreshes and never be seen |
 
+**Remote Periods (DASH xlink)** — the mechanism multi-period DASH actually uses
+for server-side insertion: the packager reserves the hole and names a service
+that fills it at playback time.
+
+| Code | What it catches |
+| --- | --- |
+| `XLINK_NO_DURATION` | A placeholder with no `@duration` — the timeline can't be laid out past it, and nothing can be told how much inventory to fill |
+| `XLINK_NO_ACTUATE` | Resolution timing left to the client: the ad request goes out minutes early or at the splice point, depending on the player |
+| `XLINK_ONLOAD_ON_LIVE` | `actuate="onLoad"` on a manifest refreshed every few seconds — every viewer re-requests the decision at that rate |
+| `XLINK_RESOLVE_FAILED` / `_UNPARSEABLE` | The service didn't answer, or answered with something that isn't DASH. The avail is lost and the manifest never said so |
+| `XLINK_DURATION_MISMATCH` | Resolved content is a different length than the hole reserved for it, shifting every Period after it |
+| `XLINK_CODEC_MISMATCH` | The ad is encoded differently than the programme — decoder tear-down at both ends of the break |
+| `XLINK_RESOLVE_SLOW` | The decision took longer than the playback deadline, so it arrived after the moment it was needed |
+
+The last four require making the request a player would make, which is opt-in
+for the same reason reading segments is. Everything else in this project can be
+judged from a manifest's text; this cannot.
+
+**Low latency** — parts and chunks change what the numbers mean. A player sits
+about a second behind the edge instead of eighteen, and every ad decision has to
+fit inside that.
+
+| Code | What it catches |
+| --- | --- |
+| `LL_PART_HOLD_BACK_TOO_SMALL` | Below the spec floor of three part durations — clients sit closer to live than the packager can sustain and rebuffer |
+| `LL_NO_SERVER_CONTROL` / `LL_NO_BLOCKING_RELOAD` | Parts published without the contract that makes them useful; the latency saved is spent polling |
+| `LL_DELTA_UPDATE_DROPS_DATERANGES` | `CAN-SKIP-UNTIL` without `CAN-SKIP-DATERANGES=YES` — the break exists for viewers doing full reloads and not for viewers taking delta updates |
+| `LL_DASH_TARGET_UNREACHABLE` | A latency target shorter than a segment, with no chunked delivery to make it reachable |
+| `LL_DASH_DELAY_DISAGREEMENT` | `@suggestedPresentationDelay` and `ServiceDescription` naming two different live points |
+| `LL_DASH_EARLY_AVAILABILITY_WITHOUT_CHUNKING` | Segments offered early while still claimed complete — clients fetch a truncation or a 404 |
+| `LL_AD_DECISION_BUDGET` | Not a fault: the hold-back or latency target stated outright, because it is the entire time an ad decision has |
+
 ## The monitor
 
 Add a stream, pick an interval, optionally give it a Slack webhook. Each poll
@@ -416,7 +450,7 @@ clean run stays silent.
 ## Testing
 
 ```bash
-npm test      # 125 tests across 8 files
+npm test      # 163 tests across 10 files
 ```
 
 - **Spec vectors** — the SCTE-35 decoder is asserted against published ANSI/SCTE
@@ -449,6 +483,11 @@ npm run build:cli
 
 ./dist/cli.mjs <url|file>                    # analyse a manifest
 ./dist/cli.mjs compare <source> <output>     # compare a feed with its stitched output
+
+./dist/cli.mjs <url> --segments 8            # open the segments and read the cues
+./dist/cli.mjs <url> --markdown              # a findings report, for a ticket
+./dist/cli.mjs <url> --json                  # the full analysis, for a pipeline
+./dist/cli.mjs <url> --strict                # exit non-zero on warnings too
 ```
 
 Takes a URL or a path, so it works against a live origin or a captured manifest.
