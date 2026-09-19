@@ -575,3 +575,7 @@ coverage beside the interval so a sparse night cannot read as a quiet one.
   whether the pod was assembled as the ad server intended
 - Reading segments during a monitor poll, rather than only on demand
 - SCTE-104, the upstream contribution-side form of the same signalling
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).

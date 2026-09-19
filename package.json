@@ -43,5 +43,8 @@
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "license": "MIT",
+  "author": "Siva Thavanathan",
+  "description": "Ad signalling in HLS and DASH, end to end: inspect, compare, monitor and simulate."
 }
