@@ -575,8 +575,9 @@ export default function Home() {
             />
             <span>
               Open the segments and read the SCTE-35 inside them, then check it agrees with the
-              manifest. Downloads a few MB and takes a few seconds — HLS only, and not available for
-              the recorded samples.
+              manifest. Reads <code className="font-mono">emsg</code> boxes in CMAF and the SCTE-35
+              stream in MPEG-TS, for HLS and DASH alike. Downloads a few MB and takes a few seconds,
+              so it needs a URL — the recorded samples carry manifests only.
             </span>
           </label>
         )}
