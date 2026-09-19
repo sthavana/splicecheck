@@ -248,6 +248,7 @@ strong { font-weight: 600; }
 a { color: var(--accent); }
 a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+td code, th code { white-space: nowrap; }
 code {
   font-family: var(--mono);
   font-size: 0.855em;
@@ -535,6 +536,7 @@ img { max-width: 100%; }
         <li><a href="#carriage">How the cue travels</a></li>
         <li><a href="#csai">Client-side insertion</a></li>
         <li><a href="#ssai">Server-side insertion</a></li>
+        <li><a href="#xlink">Remote Periods</a></li>
         <li><a href="#dai">DAI, and the hybrid</a></li>
         <li><a href="#decisioning">Ad decisioning</a></li>
         <li><a href="#measurement">Measurement</a></li>
@@ -1138,8 +1140,114 @@ descriptors         1 × avail_descriptor (CUEI)
 </section>
 
 <!-- ============================================================= 8 -->
-<section id="dai">
+<section id="xlink">
   <span class="sec-num">08</span>
+  <h2>Remote Periods, and the hole in the timeline</h2>
+
+  <p class="lede">In multi-period DASH the ad break is its own Period — and the packager often does
+  not have the ad when it writes the manifest. So it writes the hole instead, and names the service
+  that will fill it.</p>
+
+  <p>That is what <code>xlink:href</code> on a Period means. The packager reserves the extent, states
+  where the content will come from, and moves on. Something resolves it later: the player itself, a
+  CDN, or a stitcher sitting in front of both.</p>
+
+  <pre><code>&lt;Period id="content-1" start="PT0S" duration="PT120S"&gt;
+  &lt;AdaptationSet mimeType="video/mp4"&gt; ... &lt;/AdaptationSet&gt;
+&lt;/Period&gt;
+
+&lt;Period id="avail-1" start="PT120S" duration="PT90S"
+        xlink:href="https://ads.example/decide?pod=1"
+        xlink:actuate="onRequest"&gt;
+  &lt;EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin"&gt; ... &lt;/EventStream&gt;
+&lt;/Period&gt;
+
+&lt;Period id="content-2" start="PT210S" duration="PT120S"&gt;
+  &lt;AdaptationSet mimeType="video/mp4"&gt; ... &lt;/AdaptationSet&gt;
+&lt;/Period&gt;</code></pre>
+
+  <p>The middle Period has no <code>AdaptationSet</code> at all. It has a start, a duration, usually
+  the SCTE-35 that describes the avail, and an address. Everything a player needs to lay out the
+  timeline is there; everything it needs to <em>play</em> the break is somewhere else.</p>
+
+  <h3>onLoad and onRequest</h3>
+
+  <p><code>xlink:actuate</code> says when the resolution happens, and the two values buy opposite
+  things.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Value</th><th>Resolves</th><th>What it costs</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>onLoad</code></td>
+        <td>Whenever the manifest is parsed</td>
+        <td>On a live MPD refreshed every few seconds, every viewer re-requests the decision at that
+        rate. The answer can change under a player that is already buffering.</td>
+      </tr>
+      <tr>
+        <td><code>onRequest</code></td>
+        <td>When playback reaches the Period</td>
+        <td>The decision happens at the splice point, so its latency is playback latency. A slow
+        answer is a stall the viewer sees.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>The attribute is optional and defaults to <code>onRequest</code>, but implementations disagreed
+  about it for long enough that leaving it out is a portability risk rather than a shorthand. Stating
+  it is free.</p>
+
+  <div class="note">
+    <span class="tag">Lead time, again</span>
+    <p>The lead-time problem from the cue section returns here in a sharper form. With
+    <code>onRequest</code> there is no lead time at all by construction: the request goes out at the
+    moment the ad is needed. Whatever the decision service takes — call-out, auction, creative
+    selection — the player is waiting for it. This is the single largest reason remote Periods
+    under-fill in production, and it is invisible in the manifest.</p>
+  </div>
+
+  <h3>What goes wrong</h3>
+
+  <ul>
+    <li><strong>No duration on the placeholder.</strong> Without <code>@duration</code> nothing knows
+    how long the avail is until the remote document has been fetched. A live client cannot place the
+    live edge past it, and the decision service cannot be told how much inventory to fill.</li>
+    <li><strong>The service does not answer.</strong> A timeout or a 5xx leaves the player with
+    nothing to play at that point: a stall, a skip, or a jump to the content after the break,
+    depending on the client. The avail is lost and the manifest never said so.</li>
+    <li><strong>It answers with the wrong length.</strong> Every Period after the placeholder is laid
+    out against the declared duration. Resolve 60s into a 90s hole and the timeline shifts by 30s —
+    the break returns early and the gap shows as a freeze. Resolve 120s and the content after it is
+    cut.</li>
+    <li><strong>It answers with a different encode.</strong> Resolved content in another codec,
+    resolution or frame rate forces a decoder tear-down at both ends of the break. This is the black
+    frame that gets reported as "the ad broke the stream" — and it is the ad service's encode, not
+    the packager's, that caused it.</li>
+    <li><strong>It answers with nothing.</strong> An empty document is how an unfilled avail is
+    <em>supposed</em> to look: the break collapses and content resumes. Nothing is broken. It is also
+    inventory that went unsold, and it is indistinguishable from success unless someone is counting.</li>
+  </ul>
+
+  <div class="note fail">
+    <span class="tag">Why this one is different</span>
+    <p>Every other fault in this guide can be found by reading a manifest. This one cannot. The text
+    is well-formed either way — the difference between an avail that plays and an avail that is lost
+    is the response to a request that has not been made yet, to a service that is not yours, at a
+    moment you do not control. The only way to check it is to make the call yourself and see what
+    comes back.</p>
+  </div>
+
+  <p><strong>SpliceCheck</strong> reads the placeholder attributes from the manifest, and will
+  optionally resolve the remote Periods — making the request a player would make — to report whether
+  the service answers, how long it takes against the playback deadline, whether the returned duration
+  matches the hole reserved for it, and whether the ad is encoded like the programme around it.</p>
+</section>
+
+<!-- ============================================================= 9 -->
+<section id="dai">
+  <span class="sec-num">09</span>
   <h2>DAI, and why the terms blur</h2>
 
   <p class="lede"><strong>Dynamic Ad Insertion</strong> is the umbrella: any system that decides at
@@ -1188,7 +1296,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 9 -->
 <section id="decisioning">
-  <span class="sec-num">09</span>
+  <span class="sec-num">10</span>
   <h2>Ad decisioning</h2>
 
   <p class="lede">The signalling says an avail exists. Decisioning decides what goes in it — and that
@@ -1246,7 +1354,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 10 -->
 <section id="measurement">
-  <span class="sec-num">10</span>
+  <span class="sec-num">11</span>
   <h2>Measurement, and why it is contested</h2>
 
   <p class="lede">An impression is what gets billed, so the definition of one is a commercial
@@ -1284,7 +1392,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 11 -->
 <section id="failure">
-  <span class="sec-num">11</span>
+  <span class="sec-num">12</span>
   <h2>Where it breaks</h2>
 
   <p class="lede">Almost every failure below leaves the stream playing perfectly. That is the defining
@@ -1323,7 +1431,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 12 -->
 <section id="standards">
-  <span class="sec-num">12</span>
+  <span class="sec-num">13</span>
   <h2>The standards, and who owns them</h2>
 
   <div class="tablewrap">
@@ -1348,7 +1456,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 13 -->
 <section id="glossary">
-  <span class="sec-num">13</span>
+  <span class="sec-num">14</span>
   <h2>Glossary</h2>
 
   <dl class="gloss">
@@ -1377,6 +1485,7 @@ descriptors         1 × avail_descriptor (CUEI)
     meeting ad tech, or ad tech people meeting video. Terminology follows the specifications rather
     than vendor naming, which is where most confusion in this subject actually comes from.</p>
   </footer>
+</section>
 </main>
 </div>
 </div>

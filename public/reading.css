@@ -182,7 +182,7 @@ td {
   vertical-align: top; color: var(--ink-soft);
 }
 td:first-child { color: var(--ink); font-weight: 500; }
-td code { font-size: 12.5px; }
+td code { font-size: 12.5px; white-space: nowrap; }
 tbody tr:last-child td { border-bottom: none; }
 
 blockquote {
