@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { analyzeText, analyzeUrl, DEFAULT_MAX_VARIANTS } from "@/lib/runner";
 import { getSample, recordedFetcher, sampleEntryUrl } from "@/lib/samples";
 import { probeMpd, probeRendition } from "@/lib/segments";
+import { resolveRemotePeriods } from "@/lib/xlink";
+import { parseMpd } from "@/lib/dash";
 
 export const maxDuration = 60;
 
@@ -13,6 +15,8 @@ export async function POST(req: NextRequest) {
     maxVariants?: number;
     /** open this many segments and read the SCTE-35 inside them */
     probeSegments?: number;
+    /** call the ad decision service each remote Period names */
+    resolveXlink?: boolean;
   };
   try {
     body = await req.json();
@@ -47,6 +51,19 @@ export async function POST(req: NextRequest) {
     }
     const result = await analyzeUrl(body.url.trim(), maxVariants);
 
+    // Resolving remote Periods makes real requests to an ad decision service,
+    // so it is opt-in for the same reason reading segments is.
+    let xlink;
+    if (body.resolveXlink && result.raw && result.meta.protocol === "dash") {
+      try {
+        const mpd = parseMpd(result.raw.text, result.raw.uri);
+        const report = await resolveRemotePeriods(mpd);
+        if (report.attempted > 0) xlink = report;
+      } catch (e) {
+        xlink = { error: e instanceof Error ? e.message : "could not resolve remote Periods" };
+      }
+    }
+
     // Reading segments costs megabytes and seconds, so it is opt-in.
     const wanted = Math.min(Math.max(body.probeSegments ?? 0, 0), 12);
     const first = result.renditions[0];
@@ -60,15 +77,16 @@ export async function POST(req: NextRequest) {
             : raw
               ? await probeMpd(raw.text, raw.uri, first, { maxSegments: wanted })
               : undefined;
-        if (probe) return NextResponse.json({ ...response, probe });
+        if (probe) return NextResponse.json({ ...response, probe, xlink });
       } catch (e) {
         return NextResponse.json({
           ...response,
+          xlink,
           probeError: e instanceof Error ? e.message : "could not read segments",
         });
       }
     }
-    return NextResponse.json(response);
+    return NextResponse.json(xlink ? { ...response, xlink } : response);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Analysis failed" }, { status: 400 });
   }

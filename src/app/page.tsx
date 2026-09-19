@@ -468,11 +468,54 @@ function Tag({ on, yes, no, warnOnNo }: { on: boolean; yes: string; no: string; 
   );
 }
 
+function XlinkPanel({ report }: { report: import("@/lib/xlink").XlinkReport }) {
+  return (
+    <section className="mt-6">
+      <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+        Remote Periods
+      </h2>
+      <div className="rounded-xl border border-edge bg-panel">
+        <div className="border-b border-edge px-4 py-2 text-xs text-muted">
+          {report.resolved} of {report.attempted} resolved — the request a player would make, made
+          from here
+        </div>
+        <div className="divide-y divide-edge">
+          {report.resolutions.map((r, i) => (
+            <div key={i} className="px-4 py-3">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                <span className="font-medium text-foreground">Period {r.periodId ?? "?"}</span>
+                <span
+                  className={`rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wider ${
+                    r.ok ? "border-ok-line bg-ok-soft text-ok" : "border-danger-line bg-danger-soft text-danger"
+                  }`}
+                >
+                  {r.ok ? "resolved" : "failed"}
+                </span>
+                <span className={r.ms > 2000 ? "text-warn" : "text-muted"}>{r.ms}ms</span>
+                <span className="text-muted">{r.actuate}</span>
+                {r.declaredDuration !== undefined && (
+                  <span className="text-muted">
+                    reserved {r.declaredDuration.toFixed(0)}s
+                    {r.resolvedDuration !== undefined && ` · returned ${r.resolvedDuration.toFixed(0)}s`}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 break-all font-mono text-[11px] text-muted">{r.href}</div>
+              {r.error && <div className="mt-1 text-xs text-danger">{r.error}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   const [url, setUrl] = useState("");
   const [paste, setPaste] = useState("");
   const [mode, setMode] = useState<"url" | "paste">("url");
   const [readSegments, setReadSegments] = useState(false);
+  const [resolveXlink, setResolveXlink] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -491,7 +534,11 @@ export default function Home() {
           sampleId
             ? { sampleId }
             : mode === "url" || overrideUrl
-              ? { url: overrideUrl ?? url, probeSegments: forceProbe || readSegments ? 8 : 0 }
+              ? {
+                  url: overrideUrl ?? url,
+                  probeSegments: forceProbe || readSegments ? 8 : 0,
+                  resolveXlink,
+                }
               : { text: paste },
         ),
       });
@@ -608,6 +655,23 @@ export default function Home() {
           </label>
         )}
 
+        {mode === "url" && (
+          <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs text-muted">
+            <input
+              type="checkbox"
+              checked={resolveXlink}
+              onChange={(e) => setResolveXlink(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              Resolve remote Periods. Where a DASH manifest leaves an ad break as an{" "}
+              <code className="font-mono">xlink:href</code> placeholder, call the decision service it
+              names — the request a player would make — and report whether it answers, how long it
+              takes, and whether what comes back fits the hole reserved for it.
+            </span>
+          </label>
+        )}
+
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
           <span>Try:</span>
           {SAMPLES.map((s) => (
@@ -671,6 +735,7 @@ export default function Home() {
           </div>
 
           {result.probe && <ProbePanel probe={result.probe} />}
+          {result.xlink && !("error" in result.xlink) && <XlinkPanel report={result.xlink} />}
 
           {allFindings.length > 0 && (
             <section className="mt-6">

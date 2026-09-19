@@ -151,6 +151,8 @@ export interface AnalysisResult {
   /** set when segments were opened and read */
   probe?: import("./segments").SegmentProbe;
   probeError?: string;
+  /** set when remote Periods were resolved against their decision service */
+  xlink?: import("./xlink").XlinkReport | { error: string };
   fetchedAt: string;
   isMaster: boolean;
   renditions: RenditionAnalysis[];

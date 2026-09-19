@@ -157,7 +157,12 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
       ? Math.max(0, ...withMedia.map((a) => Math.abs(a.mediaDuration - ref.mediaDuration)))
       : 0;
 
-    if (gap !== undefined && Math.abs(gap) > GAP_WARN) {
+    // An unresolved remote Period has no media and, without a declared
+    // duration, no known extent — so the space after it is not a gap in the
+    // timeline, it is the hole the ad is going to fill. XLINK_NO_DURATION
+    // already reports the thing that is actually wrong.
+    const extentUnknowable = p.isPlaceholder && p.declaredDuration === undefined;
+    if (gap !== undefined && Math.abs(gap) > GAP_WARN && !extentUnknowable) {
       const overlap = gap < 0;
       add(
         Math.abs(gap) > GAP_ERROR ? "error" : "warning",
@@ -240,9 +245,67 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
       );
     }
 
+    // --- remote Periods ---------------------------------------------------
+    // A Period with xlink:href is a placeholder: the packager has left a hole
+    // and named a service that fills it at playback time. This is how DASH does
+    // server-side ad insertion in multi-period, and it moves the decision out
+    // of the manifest and into a request nobody here can see the result of.
+    if (p.xlinkHref) {
+      const actuate = p.xlinkActuate ?? "onRequest";
+
+      add(
+        "info",
+        "XLINK_REMOTE_PERIOD",
+        `Period ${p.id ?? p.index} is filled by a remote service (${actuate})`,
+        `This Period carries no content of its own — ${
+          p.isPlaceholder ? "it has no AdaptationSets at all" : "its content arrived from the remote document"
+        } — and names ${p.xlinkHref} as the source. Whether this avail plays at all depends on a service outside this manifest answering in time. Everything else here can be checked from the text; this cannot.`,
+        { atTime: p.start },
+      );
+
+      // Without @duration a client cannot lay out the timeline past the
+      // placeholder, so it cannot compute the live edge or seek across it until
+      // the resolution has happened.
+      if (p.declaredDuration === undefined && p.isPlaceholder) {
+        add(
+          live ? "error" : "warning",
+          "XLINK_NO_DURATION",
+          `Remote Period ${p.id ?? p.index} declares no @duration`,
+          `The Period is a placeholder with no duration, so nothing downstream knows how long the avail is until the remote document has been fetched and parsed. On a live manifest a client cannot place the live edge past it, and an ad decision service cannot be told how much inventory to fill. Declaring the expected duration costs nothing and lets the timeline be laid out before the ad is chosen.`,
+          { atTime: p.start },
+        );
+      }
+
+      // actuate defaults to onRequest, but implementations have disagreed about
+      // it for long enough that leaving it out is a real portability risk.
+      if (p.xlinkActuate === undefined) {
+        add(
+          "warning",
+          "XLINK_NO_ACTUATE",
+          `Remote Period ${p.id ?? p.index} does not state @xlink:actuate`,
+          "Without an explicit actuate the resolution time is left to the client: some resolve when the manifest is parsed, others only when playback reaches the Period. That is the difference between the ad request going out minutes early and going out at the splice point, which changes both the fill rate and whether the player stalls at the boundary.",
+          { atTime: p.start },
+        );
+      }
+
+      // onLoad on a live manifest means every refresh re-resolves, which at a
+      // few seconds per refresh is a request rate nobody intends.
+      if (actuate === "onLoad" && live && mpd.minimumUpdatePeriod !== undefined) {
+        add(
+          "warning",
+          "XLINK_ONLOAD_ON_LIVE",
+          `Remote Period ${p.id ?? p.index} resolves on load of a manifest refreshed every ${fmt(mpd.minimumUpdatePeriod)}s`,
+          `xlink:actuate="onLoad" tells a client to resolve the remote Period every time it parses the manifest. This MPD is refreshed every ${fmt(mpd.minimumUpdatePeriod)}s, so each viewer re-requests the ad decision at that rate for as long as the Period stays in the window — and may get a different answer each time, which changes the timeline underneath a player that is already buffering. onRequest defers the resolution to the point of use.`,
+          { atTime: p.start },
+        );
+      }
+    }
+
     // Only claim a period is empty when there was a timeline to be empty.
+    // A remote Period has no media by design until it is resolved, so it is not
+    // the same failure as a packager producing an ad Period with nothing in it.
     const numberAddressed = p.adaptationSets.some((a) => !a.usesTimeline && a.segmentDuration !== undefined);
-    if (p.mediaDuration === 0 && !numberAddressed) {
+    if (p.mediaDuration === 0 && !numberAddressed && !p.isPlaceholder) {
       add(
         "warning",
         "EMPTY_PERIOD",
@@ -272,6 +335,11 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
   for (let i = 1; i < periods.length; i++) {
     const prev = periods[i - 1];
     const cur = periods[i];
+    // A remote Period that has not been resolved presents no Representations
+    // yet. Comparing against it would report every placeholder as a codec
+    // change and every boundary beside one as missing continuity — faults that
+    // belong to the resolved document, which is not in front of us.
+    if (prev.isPlaceholder || cur.isPlaceholder) continue;
     const same = repSignature(prev) === repSignature(cur);
     if (!same) {
       const prevReps = prev.adaptationSets.flatMap((a) => a.representations.map((r) => `${r.codecs ?? "?"} ${r.width ?? ""}x${r.height ?? ""}`));

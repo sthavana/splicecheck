@@ -99,6 +99,18 @@ export interface DashPeriod {
   events: DashEvent[];
   assetIdentifier?: string;
   supplementalProperties: string[];
+  /**
+   * A remote Period: the manifest names a service that supplies the real
+   * content at playback time rather than carrying it here. This is how
+   * multi-period DASH does server-side ad insertion — the packager leaves a
+   * placeholder pointing at an ad decision service, and something resolves it
+   * before the player reaches it.
+   */
+  xlinkHref?: string;
+  /** "onLoad" resolves when the manifest is parsed; "onRequest" defers it. */
+  xlinkActuate?: string;
+  /** A remote Period that carries no media of its own yet. */
+  isPlaceholder: boolean;
 }
 
 export interface MpdDocument {
@@ -333,6 +345,10 @@ export function parseMpd(text: string, uri: string): MpdDocument {
     const start = startExplicit ? (parseDuration(String(startAttr)) ?? 0) : runningStart;
     const declaredDuration = parseDuration(pick(p, "duration") as string | undefined);
 
+    const xlinkHrefRaw = pick(p, "href");
+    const xlinkHref = xlinkHrefRaw !== undefined ? String(xlinkHrefRaw) : undefined;
+    const xlinkActuate = pick(p, "actuate") !== undefined ? String(pick(p, "actuate")) : undefined;
+
     const adaptationSets: DashAdaptationSet[] = arr(
       child(p, "AdaptationSet") as Record<string, unknown>[] | undefined,
     ).map((as) => {
@@ -434,6 +450,12 @@ export function parseMpd(text: string, uri: string): MpdDocument {
         ? `${pick(assetId, "schemeIdUri") ?? ""}${pick(assetId, "value") ? "=" + pick(assetId, "value") : ""}`
         : undefined,
       supplementalProperties: schemeList(p, "SupplementalProperty"),
+      xlinkHref,
+      xlinkActuate,
+      // A remote Period that has not been resolved carries no media of its own.
+      // Once resolved, the AdaptationSets are present and it is an ordinary
+      // Period that happens to have come from somewhere else.
+      isPlaceholder: xlinkHref !== undefined && adaptationSets.length === 0,
     });
 
     runningStart = start + (declaredDuration ?? mediaDuration);

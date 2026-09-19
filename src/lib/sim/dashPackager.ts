@@ -25,11 +25,25 @@ export interface DashSpec {
   periodContinuity?: boolean;
   /** Carry the SCTE-35 in a Period-level EventStream. */
   emitEventStream?: boolean;
+  /**
+   * Leave the ad Periods as remote placeholders pointing at a decision
+   * service, rather than filling them here. This is how multi-period DASH
+   * actually does server-side insertion: the packager reserves the hole and
+   * something else fills it at playback time.
+   */
+  xlinkAds?: boolean;
+  /** Where the placeholders point. */
+  xlinkBase?: string;
+  xlinkActuate?: "onLoad" | "onRequest";
   faults?: {
     /** Leave a hole between the end of one Period and the start of the next. */
     periodGap?: boolean;
     /** Omit @presentationTimeOffset, so the segment numbering means nothing. */
     dropPresentationTimeOffset?: boolean;
+    /** xlink: the placeholder reserves no duration, so its extent is unknown. */
+    xlinkNoDuration?: boolean;
+    /** xlink: leave @xlink:actuate off, so the resolution time is undefined. */
+    xlinkNoActuate?: boolean;
     /**
      * The ad Period absorbs everything after it and no end event is written:
      * the presentation never returns to programme. This is the DASH shape of a
@@ -128,7 +142,7 @@ export function writeMpd(
 
   const lines: string[] = [
     '<?xml version="1.0" encoding="utf-8"?>',
-    `<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:scte35="urn:scte:scte35:2014:xml+bin"`,
+    `<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:scte35="urn:scte:scte35:2014:xml+bin" xmlns:xlink="http://www.w3.org/1999/xlink"`,
     `     profiles="urn:mpeg:dash:profile:isoff-live:2011" type="dynamic"`,
     `     availabilityStartTime="${iso(availabilityStart)}" publishTime="${iso(availabilityStart + (tl.segments[from + count - 1]?.startSec ?? 0) * 1000)}"`,
     `     minimumUpdatePeriod="${xsDuration(spec.minimumUpdatePeriod ?? tl.spec.segmentSeconds)}"`,
@@ -143,7 +157,20 @@ export function writeMpd(
     if (faults.periodGap && p.isAd) drift += tl.spec.segmentSeconds / 2;
     const startSec = p.startSec + drift;
 
-    lines.push(`  <Period id="${p.id}" start="${xsDuration(startSec)}" duration="${xsDuration(p.durationSec)}">`);
+    // A remote ad Period carries no content of its own: it names the service
+    // that supplies it and closes immediately.
+    const remoteAd = spec.xlinkAds === true && p.isAd;
+    if (remoteAd) {
+      const base = spec.xlinkBase ?? "https://ads.example/vast2dash";
+      const href = `${base}?avail=${p.availId}&amp;dur=${p.durationSec}`;
+      const actuate = faults.xlinkNoActuate ? "" : ` xlink:actuate="${spec.xlinkActuate ?? "onRequest"}"`;
+      const dur = faults.xlinkNoDuration ? "" : ` duration="${xsDuration(p.durationSec)}"`;
+      lines.push(
+        `  <Period id="${p.id}" start="${xsDuration(startSec)}"${dur} xlink:href="${href}"${actuate}>`,
+      );
+    } else {
+      lines.push(`  <Period id="${p.id}" start="${xsDuration(startSec)}" duration="${xsDuration(p.durationSec)}">`);
+    }
 
     if (p.isAd) {
       lines.push(`    <AssetIdentifier schemeIdUri="urn:org:dashif:asset-id:2013" value="ad-break-${p.availId}"/>`);
@@ -173,6 +200,12 @@ export function writeMpd(
         }
         lines.push(`    </EventStream>`);
       }
+    }
+
+    if (remoteAd) {
+      // No AdaptationSets: the whole point is that the content is elsewhere.
+      lines.push(`  </Period>`);
+      continue;
     }
 
     const pto = faults.dropPresentationTimeOffset ? undefined : Math.round(startSec * TIMESCALE);
