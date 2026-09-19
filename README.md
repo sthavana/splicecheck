@@ -27,7 +27,8 @@ Three parts, plus a CLI:
 > The hosted demo runs the inspector and the comparison in full. Continuous
 > monitoring needs a process alive between requests and a disk that survives it,
 > which serverless gives neither of — so on the demo that page explains itself
-> and offers on-demand polling. `npm run dev` gives the real thing.
+> and offers on-demand polling. Clone it and `npm run monitor` gives the real
+> thing (see [Running the monitor](#running-the-monitor)).
 
 ![The inspector analysing a multi-period DASH manifest: zero errors, with each finding explained](docs/inspector-dash.png)
 
@@ -432,10 +433,29 @@ The fetcher is injected, so the identical analysis runs against the network, a
 recorded bundle, or a test fixture. The monitor calls the same `analyzeUrl` the
 API does.
 
+### Running the monitor
+
+```bash
+git clone https://github.com/sthavana/splicecheck.git
+cd splicecheck
+npm install
+npm run monitor
+```
+
+Then open `http://localhost:3000/monitors`, add a stream, and leave it.
+
 State lives in SQLite at `./data/splicecheck.db` (override with
-`SPLICECHECK_DB`). The poller runs in-process, so it needs a long-lived Node
-process — `npm run dev`, `npm start`, or a container. A serverless deployment
-would need a hosted database and a cron route instead.
+`SPLICECHECK_DB`), so runs and alerts survive a restart. The poller runs
+in-process, so it needs a long-lived Node process — `npm run monitor`,
+`npm start`, or a container. A serverless deployment would need a hosted
+database and a cron route instead.
+
+`npm run monitor` is `npm run dev` with a wake lock held (`caffeinate -im` on
+macOS). The poll loop lives in that process and stops whenever the machine
+sleeps: a Mac left alone drops into maintenance sleep for about four minutes at
+a stretch and wakes for forty-five seconds, which left a night of monitoring
+here 57% covered before anyone noticed. The monitors page now shows observed
+coverage beside the interval so a sparse night cannot read as a quiet one.
 
 ## Not done yet
 

@@ -243,6 +243,28 @@ export default function Monitors() {
             will not happen is the part that matters in production: polling on an interval and
             alerting when a result changes for the worse.
           </p>
+
+          <div className="mt-4 border-t border-warn-line pt-3">
+            <p className="text-sm font-medium text-warn">Run it locally and the polling works</p>
+            <pre className="mt-2 overflow-x-auto rounded-lg border border-warn-line bg-panel p-3 font-mono text-xs leading-relaxed text-foreground">
+{`git clone https://github.com/sthavana/splicecheck.git
+cd splicecheck
+npm install
+npm run monitor`}
+            </pre>
+            <p className="mt-2 text-sm leading-relaxed text-warn">
+              Then open <span className="font-mono text-xs">http://localhost:3000/monitors</span>, add
+              a stream, and leave it. Runs and alerts are kept in a SQLite file under{" "}
+              <span className="font-mono text-xs">data/</span>, so they survive a restart.
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-warn">
+              <span className="font-mono text-xs">npm run monitor</span> is{" "}
+              <span className="font-mono text-xs">npm run dev</span> with a wake lock held, because the
+              poll loop lives in that process and stops whenever the machine sleeps — a Mac left alone
+              drops into maintenance sleep for four minutes at a stretch, which left a night of
+              monitoring 57% covered here before it was noticed.
+            </p>
+          </div>
         </div>
       )}
 
