@@ -1,0 +1,438 @@
+<!doctype html>
+  <html lang="en">
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The ad response</title>
+  <meta name="description" content="VAST and VMAP in depth: the document structure, wrappers and chains, tracking and error reporting, ad pods, and everything that changes when the thing consuming the response is a stitcher rather than a browser.">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-icon.png">
+  <meta property="og:title" content="The ad response">
+  <meta property="og:description" content="VAST and VMAP in depth: the document structure, wrappers and chains, tracking and error reporting, ad pods, and everything that changes when the thing consuming the response is a stitcher rather than a browser.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://splicecheck.vercel.app/ad-response">
+  <meta property="og:image" content="https://splicecheck.vercel.app/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://splicecheck.vercel.app/og.png">
+  <link rel="stylesheet" href="/reading.css">
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+  </head>
+  <body>
+
+  <div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+  <div class="site-shell">
+    <nav class="site-nav" aria-label="Site">
+      <a class="site-nav-brand" href="/">Splice<span>Check</span></a>
+
+      <div class="site-nav-group">
+      <h2>Tool</h2>
+      <p class="site-nav-note">Point it at a live stream</p>
+      <ul>
+        <li><a href="/">Inspector</a></li>
+        <li><a href="/compare">Pipeline comparison</a></li>
+        <li><a href="/monitors">Monitors</a></li>
+        <li><a href="/vast">Ad response</a></li>
+      </ul>
+    </div>
+
+    <div class="site-nav-group">
+      <h2>Simulator</h2>
+      <p class="site-nav-note">Build a stream, then break it</p>
+      <ul>
+        <li><a href="/simulator">Chain simulator</a></li>
+      </ul>
+    </div>
+
+    <div class="site-nav-group">
+      <h2>Reading</h2>
+      <p class="site-nav-note">How the chain works</p>
+      <ul>
+        <li><a href="/guide">Ad insertion</a></li>
+        <li><a href="/ad-response" aria-current="page">The ad response</a></li>
+        <li><a href="/streaming">Delivery chain</a></li>
+        <li><a href="/notes/fifty-five-alerts">Fifty-five alerts</a></li>
+      </ul>
+    </div>
+
+      <div class="site-nav-toc">
+        <h2>On this page</h2>
+        <ol>
+          <li><a href="#1-what-a-vast-response-is">What a VAST response is</a></li>
+        <li><a href="#2-inline-and-wrapper">Inline and wrapper</a></li>
+        <li><a href="#3-what-changes-when-a-stitcher-is-the-consumer">What changes when a stitcher is the consumer</a></li>
+        <li><a href="#4-pods-and-fitting-the-hole">Pods, and fitting the hole</a></li>
+        <li><a href="#5-tracking-and-what-it-can-honestly-tell-you">Tracking, and what it can honestly tell you</a></li>
+        <li><a href="#6-vmap-the-schedule">VMAP: the schedule</a></li>
+        <li><a href="#7-where-this-connects-to-the-rest-of-the-chain">Where this connects to the rest of the chain</a></li>
+        </ol>
+      </div>
+
+      <div class="site-nav-foot">
+        <a href="https://github.com/sthavana/splicecheck">Source</a>
+      </div>
+    </nav>
+
+    <div class="site-main">
+      <div class="shell wide">
+
+        <header class="masthead">
+          <p class="eyebrow">Ad technology · reference</p>
+          <h1>The ad response</h1>
+          <p class="standfirst">SCTE-35 says an avail exists. VAST says what goes in it. This is the half of ad insertion that is written for a player — and server-side insertion is not one.</p>
+        </header>
+
+        <main>
+  <p>Everything else about ad insertion is about the <em>signal</em>: where the break is, how
+long it runs, how that gets from an encoder to a manifest to a stitcher. This is
+about the other half. The signal says an avail exists. The response says what
+goes in it.</p>
+<p>The two halves fail in completely different ways, and they get blamed on each
+other constantly. An avail that is signalled perfectly and filled with a creative
+the packager cannot use is still an unfilled avail — and from the manifest, it
+looks exactly like a signalling fault.</p>
+<section id="1-what-a-vast-response-is"><h2><span class="sec-num">01</span>What a VAST response is</h2>
+<p><strong>VAST</strong> — Video Ad Serving Template — is an XML document that answers the
+question <em>what should I play here</em>. It is the lingua franca between an ad
+decision service and whatever is going to play the ad.</p>
+<p>At its simplest it is one ad, with one creative, with one media file:</p>
+<pre><code class="language-xml">&lt;VAST version=&quot;4.2&quot;&gt;
+  &lt;Ad id=&quot;4417&quot;&gt;
+    &lt;InLine&gt;
+      &lt;AdSystem&gt;Some Decision Service&lt;/AdSystem&gt;
+      &lt;AdTitle&gt;Northbridge Motors&lt;/AdTitle&gt;
+      &lt;Impression&gt;&lt;![CDATA[https://ads.example/imp?c=4417]]&gt;&lt;/Impression&gt;
+      &lt;Error&gt;&lt;![CDATA[https://ads.example/err?code=[ERRORCODE]]]&gt;&lt;/Error&gt;
+      &lt;Creatives&gt;
+        &lt;Creative id=&quot;c1&quot;&gt;
+          &lt;UniversalAdId idRegistry=&quot;Ad-ID&quot;&gt;ABCD0001000H&lt;/UniversalAdId&gt;
+          &lt;Linear&gt;
+            &lt;Duration&gt;00:00:30&lt;/Duration&gt;
+            &lt;TrackingEvents&gt;
+              &lt;Tracking event=&quot;start&quot;&gt;&lt;![CDATA[https://ads.example/t?e=start]]&gt;&lt;/Tracking&gt;
+              &lt;Tracking event=&quot;firstQuartile&quot;&gt;…&lt;/Tracking&gt;
+              &lt;Tracking event=&quot;midpoint&quot;&gt;…&lt;/Tracking&gt;
+              &lt;Tracking event=&quot;thirdQuartile&quot;&gt;…&lt;/Tracking&gt;
+              &lt;Tracking event=&quot;complete&quot;&gt;…&lt;/Tracking&gt;
+            &lt;/TrackingEvents&gt;
+            &lt;MediaFiles&gt;
+              &lt;MediaFile type=&quot;video/mp4&quot; codec=&quot;avc1.64001f&quot;
+                         width=&quot;1280&quot; height=&quot;720&quot; bitrate=&quot;2500&quot;
+                         delivery=&quot;progressive&quot;&gt;
+                &lt;![CDATA[https://cdn.ads.example/4417/720p.mp4]]&gt;
+              &lt;/MediaFile&gt;
+            &lt;/MediaFiles&gt;
+          &lt;/Linear&gt;
+        &lt;/Creative&gt;
+      &lt;/Creatives&gt;
+    &lt;/InLine&gt;
+  &lt;/Ad&gt;
+&lt;/VAST&gt;
+</code></pre>
+<p>Five things in that document matter more than the rest.</p>
+<p><strong><code>&lt;Duration&gt;</code></strong> is what a stitcher lays the pod out against, before it fetches
+anything at all. It is a declaration, not a measurement — and when it disagrees
+with the actual media, the media wins and the timeline is wrong.</p>
+<p><strong><code>&lt;MediaFile&gt;</code></strong> is the only part that is actually video. Everything else is
+metadata about it. A response can be perfectly well-formed and contain no media
+anyone downstream can use.</p>
+<p><strong><code>&lt;Impression&gt;</code></strong> is what gets counted, and therefore what gets billed. An ad
+that plays without firing one is inventory delivered for free.</p>
+<p><strong><code>&lt;Error&gt;</code></strong> is how the decision service finds out its creative failed. Leave it
+out and the ad server&#39;s fill rate stays beautiful while viewers watch slate —
+two teams looking at different numbers, both of them correct.</p>
+<p><strong><code>&lt;UniversalAdId&gt;</code></strong> identifies the creative across systems. Without it,
+deduplication and frequency capping are guesswork.</p>
+<div class="xref"><span class="tag">In SpliceCheck</span><p>the ad response tool reads all of these and reports the ones
+that are missing, with the consequence attached rather than just the rule.</p></div>
+<hr>
+</section><section id="2-inline-and-wrapper"><h2><span class="sec-num">02</span>Inline and wrapper</h2>
+<p>An <code>&lt;Ad&gt;</code> contains either an <code>&lt;InLine&gt;</code> — an actual ad — or a <code>&lt;Wrapper&gt;</code>, which
+is a redirect to another VAST document:</p>
+<pre><code class="language-xml">&lt;Ad id=&quot;w1&quot;&gt;
+  &lt;Wrapper followAdditionalWrappers=&quot;true&quot; allowMultipleAds=&quot;false&quot;&gt;
+    &lt;AdSystem&gt;An Exchange&lt;/AdSystem&gt;
+    &lt;VASTAdTagURI&gt;&lt;![CDATA[https://demand.example/vast?bid=xyz]]&gt;&lt;/VASTAdTagURI&gt;
+    &lt;Impression&gt;&lt;![CDATA[https://exchange.example/imp]]&gt;&lt;/Impression&gt;
+  &lt;/Wrapper&gt;
+&lt;/Ad&gt;
+</code></pre>
+<p>Wrappers exist because the supply chain is a chain. A request passes through a
+publisher&#39;s ad server, then a network, then an exchange, then a demand partner,
+and each one wants its own impression counted. Each hop adds a redirect.</p>
+<p>The impressions accumulate: every wrapper in the chain contributes its
+<code>&lt;Impression&gt;</code> and its tracking URLs, and the player or stitcher is expected to
+fire all of them, not just the ones from the final document.</p>
+<h3>Why chains cost more than they look</h3>
+<p>Every hop is a real HTTP round trip, and they are <strong>serial</strong> — nothing can
+request the next document until the previous one has answered.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Hops</th>
+<th>At 150ms each</th>
+<th>At 400ms each</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>150ms</td>
+<td>400ms</td>
+</tr>
+<tr>
+<td>3</td>
+<td>450ms</td>
+<td>1.2s</td>
+</tr>
+<tr>
+<td>5</td>
+<td>750ms</td>
+<td>2.0s</td>
+</tr>
+</tbody></table></div>
+<p>IAB guidance puts the limit at five redirects, and most players enforce
+something like it. But the limit that bites first is almost always the clock,
+not the count. If the ad decision has one second — and on a low-latency stream
+it does — then three hops at four hundred milliseconds have spent the entire
+budget before anybody has looked at a creative.</p>
+<p>Two other wrapper failures are worth naming because they are silent:</p>
+<ul>
+<li><strong>A loop.</strong> A wrapper that points back at a document already in the chain.
+Players follow it until they hit their own depth limit, then report an error —
+having paid for every round trip on the way.</li>
+<li><strong>A body that is not VAST.</strong> A redirect that answers with an HTML error page
+fails exactly like one that does not answer at all, but it is harder to notice
+because the request succeeded. HTTP 200 is not the same as an ad.</li>
+</ul>
+<div class="xref"><span class="tag">In SpliceCheck</span><p>following the chain is opt-in, because it makes real requests
+to somebody else&#39;s ad server. It reports the depth, the per-hop timing, the
+total, and whether the chain loops, dead-ends, or answers with something
+unparseable.</p></div>
+<hr>
+</section><section id="3-what-changes-when-a-stitcher-is-the-consumer"><h2><span class="sec-num">03</span>What changes when a stitcher is the consumer</h2>
+<p>This is the section that matters if you work on the video side, and it is the
+one most VAST documentation skips, because VAST was designed for players.</p>
+<p>A <strong>player</strong> is a browser or an app. It has a JavaScript engine, it knows the
+device, it knows the current bandwidth, and it can choose a media file at the
+moment of playback.</p>
+<p>A <strong>stitcher</strong> — a server-side ad insertion service — has none of that. It is
+picking media ahead of time, on behalf of viewers it cannot see, to splice into
+a presentation that already exists.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>A player can</th>
+<th>A stitcher cannot</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Executable creatives</td>
+<td>Run VPAID JavaScript in its own context</td>
+<td>There is no browser. A VPAID-only response is unfillable.</td>
+</tr>
+<tr>
+<td>Media selection</td>
+<td>Choose at playback, knowing device and bandwidth</td>
+<td>Must choose up front, for everyone</td>
+</tr>
+<tr>
+<td>Mismatched encodes</td>
+<td>Tear down and re-initialise its decoder</td>
+<td>Can transcode — with time the decision budget may not have</td>
+</tr>
+<tr>
+<td>Tracking</td>
+<td>Fire beacons from the device, reflecting what played</td>
+<td>Infers playback from segment requests</td>
+</tr>
+<tr>
+<td>Interactivity</td>
+<td>Overlays, clickthrough, skip buttons</td>
+<td>Has no UI surface at all</td>
+</tr>
+</tbody></table></div>
+<h3>VPAID, and why it cannot work server-side</h3>
+<p><strong>VPAID</strong> creatives are JavaScript. The ad is a program the player executes,
+which is how interactive and expandable ads work. Server-side insertion has no
+JavaScript engine, no DOM, and no player context — so a VPAID creative is not
+&quot;hard to stitch&quot;, it is impossible to stitch.</p>
+<p>A response offering VPAID alongside a plain MP4 is fine; the stitcher takes the
+MP4. A response offering <em>only</em> VPAID is an unfilled avail by construction,
+however healthy the signalling around it.</p>
+<p>VPAID is deprecated in VAST 4.x in favour of <strong>SIMID</strong> for interactivity and
+<strong>OMID</strong> for verification, precisely because conflating the ad&#39;s media with the
+ad&#39;s code made server-side delivery impossible. Plenty of inventory still
+returns it.</p>
+<h3>The creative has to fit a ladder that already exists</h3>
+<p>The ad is going to be spliced into an existing presentation with an existing ABR
+ladder. Two mismatches matter:</p>
+<ul>
+<li><strong>Codec.</strong> An HEVC ad in an H.264 stream forces a decoder tear-down at both
+ends of the break. That is the black frame or audio drop that gets reported as
+&quot;the ad broke the stream&quot; — and the cause is the ad service&#39;s encode, not the
+packager&#39;s.</li>
+<li><strong>Bitrate.</strong> A creative encoded at 9 Mbps spliced into a ladder that tops out
+at 1.3 Mbps is heavier than anything that viewer has ever sustained. The
+rebuffer lands in the middle of the ad.</li>
+</ul>
+<p>Conditioning ads — transcoding them to match the content ladder&#39;s codec, GOP
+structure and rungs — is normally a separate pipeline that runs before the ad is
+ever eligible. When it is missing or incomplete, the symptom appears at playback
+and looks like a delivery fault.</p>
+<div class="xref"><span class="tag">In SpliceCheck</span><p>give it the stream URL alongside the response and it compares
+the creative&#39;s codec and bitrate against that stream&#39;s actual ladder. It ignores
+the ladder&#39;s audio codecs when doing so — comparing an ad&#39;s video against
+<code>mp4a</code> would report a mismatch on every well-formed stream there is.</p></div>
+<hr>
+</section><section id="4-pods-and-fitting-the-hole"><h2><span class="sec-num">04</span>Pods, and fitting the hole</h2>
+<p>An avail is rarely one ad. A ninety-second break is typically three thirties, or
+a sixty and a thirty — a <strong>pod</strong>. VAST expresses this with multiple <code>&lt;Ad&gt;</code>
+elements carrying a <code>sequence</code> attribute.</p>
+<p>The arithmetic is unforgiving, because the break has a fixed length that
+something else already decided:</p>
+<ul>
+<li><strong>The pod runs long.</strong> The stitcher either truncates the last ad — which is
+then unbillable, and the advertiser is entitled to object — or it runs past the
+return and cuts into programme content.</li>
+<li><strong>The pod runs short.</strong> The remainder is slate, black, or an early return. This
+is <em>under-fill</em>, and it is directly measurable lost revenue rather than a
+delivery fault.</li>
+<li><strong>The pod is empty.</strong> No ads returned at all. The break collapses and content
+resumes, which is correct behaviour and completely invisible.</li>
+</ul>
+<p>That last case deserves emphasis. An empty VAST response is not malformed. It is
+how a decision service says <em>I have nothing for you</em>. Nothing in the manifest,
+nothing in the player, and nothing in the delivery chain registers a fault —
+and yet the inventory went unsold. It is indistinguishable from success unless
+somebody is counting.</p>
+<div class="xref"><span class="tag">In SpliceCheck</span><p>the pod is measured against the avail duration the SCTE-35
+asked for, using the same over- and under-fill arithmetic the pipeline
+comparison applies to manifests. An empty response is reported as no fill, at
+warning rather than error, because it is a business outcome and not a bug.</p></div>
+<hr>
+</section><section id="5-tracking-and-what-it-can-honestly-tell-you"><h2><span class="sec-num">05</span>Tracking, and what it can honestly tell you</h2>
+<p>A creative carries tracking URLs for the points in its playback worth knowing
+about:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Fired when</th>
+<th>What its absence costs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>impression</code></td>
+<td>The ad begins</td>
+<td>Nothing is billed</td>
+</tr>
+<tr>
+<td><code>start</code></td>
+<td>Playback starts</td>
+<td>Cannot separate served from played</td>
+</tr>
+<tr>
+<td><code>firstQuartile</code></td>
+<td>25%</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>midpoint</code></td>
+<td>50%</td>
+<td>The most common completion proxy</td>
+</tr>
+<tr>
+<td><code>thirdQuartile</code></td>
+<td>75%</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>complete</code></td>
+<td>100%</td>
+<td>Completion rate is unmeasurable</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>The creative failed</td>
+<td>The ad server never learns</td>
+</tr>
+</tbody></table></div>
+<p>Without the full quartile set, an ad that ran to the end reports identically to
+one that failed halfway. Completion rate — which is what most campaigns are
+actually judged on — becomes unavailable.</p>
+<h3>Who fires them changes what they mean</h3>
+<p>This is the measurement trade-off between the two insertion models, and it is
+worth being precise about.</p>
+<p><strong>Client-side</strong>: the player fires the beacons. They reflect what actually
+happened on the device — including that the tab was backgrounded, the player was
+muted, or the viewer scrolled away. Accurate, and reachable by an ad blocker.</p>
+<p><strong>Server-side</strong>: the stitcher fires them, inferring playback from segment
+requests. Robust against blocking, because the requests never come from the
+device. But a segment request is not a view: the player may have requested it
+and never rendered it, or rendered it muted, or rendered it off-screen.</p>
+<p>Neither is wrong. They are measuring different things, and comparing a
+client-side campaign&#39;s numbers with a server-side one&#39;s is comparing two
+different definitions of &quot;played&quot;.</p>
+<p><strong>OMID</strong> — Open Measurement — exists to close part of this gap by letting a
+verification vendor observe the ad inside the player even when the ad was
+inserted server-side.</p>
+<hr>
+</section><section id="6-vmap-the-schedule"><h2><span class="sec-num">06</span>VMAP: the schedule</h2>
+<p>Where VAST answers <em>what plays here</em>, <strong>VMAP</strong> answers <em>where are the breaks</em>.
+It is the VOD counterpart to a live stream&#39;s SCTE-35 cues — a schedule, computed
+in advance, for an asset whose timeline is fully known.</p>
+<pre><code class="language-xml">&lt;VMAP version=&quot;1.0&quot;&gt;
+  &lt;AdBreak timeOffset=&quot;start&quot; breakType=&quot;linear&quot; breakId=&quot;pre&quot;&gt;
+    &lt;AdSource&gt;&lt;AdTagURI&gt;&lt;![CDATA[https://ads.example/pre]]&gt;&lt;/AdTagURI&gt;&lt;/AdSource&gt;
+  &lt;/AdBreak&gt;
+  &lt;AdBreak timeOffset=&quot;00:10:00&quot; breakType=&quot;linear&quot; breakId=&quot;mid1&quot;&gt;
+    &lt;AdSource&gt;&lt;AdTagURI&gt;&lt;![CDATA[https://ads.example/mid1]]&gt;&lt;/AdTagURI&gt;&lt;/AdSource&gt;
+  &lt;/AdBreak&gt;
+  &lt;AdBreak timeOffset=&quot;end&quot; breakType=&quot;linear&quot; breakId=&quot;post&quot;&gt;
+    &lt;AdSource&gt;&lt;AdTagURI&gt;&lt;![CDATA[https://ads.example/post]]&gt;&lt;/AdTagURI&gt;&lt;/AdSource&gt;
+  &lt;/AdBreak&gt;
+&lt;/VMAP&gt;
+</code></pre>
+<p><code>timeOffset</code> accepts <code>start</code>, <code>end</code>, a timestamp, or a percentage. Each break
+names an <code>AdSource</code> — either a tag URI to call at playback, or an inline VAST
+document embedded directly.</p>
+<p>Three things go wrong often enough to check for:</p>
+<ul>
+<li><strong>A break with no <code>timeOffset</code>.</strong> Nothing says where it belongs, so
+implementations differ on whether to drop it or place it at the start.</li>
+<li><strong>A break with no <code>AdSource</code>.</strong> The slot is scheduled with nothing to put in
+it. It will be empty.</li>
+<li><strong>Two breaks at the same offset.</strong> This is not a pod — a pod is several ads in
+one break. Players differ on whether they run both, run one, or error, so the
+behaviour is not predictable across devices.</li>
+</ul>
+<hr>
+</section><section id="7-where-this-connects-to-the-rest-of-the-chain"><h2><span class="sec-num">07</span>Where this connects to the rest of the chain</h2>
+<p>The ad response does not sit on its own. Two connections matter more than the
+rest, and both are invisible if you only look at one layer.</p>
+<p><strong>Lead time and wrapper depth are the same problem.</strong> Lead time is how much of a
+head start the decision gets — the gap between the cue reaching the manifest and
+the splice happening. The wrapper chain is how much of that head start the
+decision spends before it begins deciding. A stream can carry a generous cue,
+well ahead of the splice point, and still under-fill because four redirects
+consumed it. Neither number appears in the other&#39;s documentation.</p>
+<p><strong>The symptom surfaces a layer away from the cause.</strong> A VPAID-only response, a
+creative in the wrong codec, a chain that times out — all three appear
+downstream as an avail that did not fill. In the manifest, that looks like a
+signalling fault, and it is usually reported as one. The packaging team then
+spends a day proving the SCTE-35 was correct, which it was.</p>
+<p>That is the argument for checking both halves with the same tool: not because
+the two are similar, but because when they disagree, whoever is looking at only
+one of them will reach the wrong conclusion with complete confidence.</p>
+</section>
+        </main>
+      </div>
+    </div>
+  </div>
+  </body>
+  </html>
+  

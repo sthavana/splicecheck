@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/guide", destination: "/guide.html" },
       { source: "/streaming", destination: "/streaming.html" },
+      { source: "/ad-response", destination: "/ad-response.html" },
       { source: "/notes/fifty-five-alerts", destination: "/notes/fifty-five-alerts.html" },
     ];
   },
