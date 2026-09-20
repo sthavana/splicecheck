@@ -340,6 +340,8 @@ actually be stitched. SCTE-35 says an avail exists; this is what goes in it.
 | `VAST_NO_FILL` | Not malformed: unsold inventory, indistinguishable from a filled break unless someone counts |
 | `VMAP_NO_AD_SOURCE` / `VMAP_DUPLICATE_OFFSET` | A scheduled break with nothing to put in it, or two breaks at one instant |
 
+![The ad response tool: a VAST document checked against what server-side insertion can splice, with the findings it produces](docs/ad-response.png)
+
 Following a wrapper chain makes real requests to an ad server, so like
 reading segments and resolving remote Periods it is opt-in.
 

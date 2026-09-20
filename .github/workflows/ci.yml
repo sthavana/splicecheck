@@ -38,12 +38,14 @@ jobs:
       # navigation as an unstyled list. That happened once; this catches it.
       - name: Static pages link the shared stylesheet
         run: |
-          for f in public/guide.html public/streaming.html public/notes/*.html; do
+          # Every static page, found rather than listed — the list was missing
+          # the two most recently added, which is the failure this guards against.
+          for f in $(find public -name '*.html'); do
             grep -q 'reading.css' "$f" || { echo "$f does not link /reading.css"; exit 1; }
             grep -q 'site-nav-brand' "$f" || { echo "$f has no site navigation"; exit 1; }
             grep -q 'theme.js' "$f" || { echo "$f has no theme control"; exit 1; }
           done
-          echo "all static pages link the stylesheet and carry navigation"
+          echo "all $(find public -name '*.html' | wc -l) static pages link the stylesheet and carry navigation"
 
       - name: CLI finds planted defects and fails
         run: |

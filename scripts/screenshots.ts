@@ -101,6 +101,18 @@ async function main() {
     .screenshot({ path: `${OUT}/simulator-fault.png` });
   console.log("captured simulator-fault.png");
 
+  // --- ad response -------------------------------------------------------
+  // The sample response is deliberately unstitchable, so the capture shows the
+  // rules doing something rather than an empty state.
+  await page.goto(`${BASE}/vast`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#vast-avail", { timeout: 30_000 });
+  await page.locator("#vast-avail").fill("30");
+  await page.getByRole("button", { name: /Check the response/ }).click();
+  await page.waitForSelector("text=/Findings/", { timeout: 60_000 });
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${OUT}/ad-response.png` });
+  console.log("captured ad-response.png");
+
   // --- monitors ----------------------------------------------------------
   await page.goto(`${BASE}/monitors`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1500); // let the first poll render
