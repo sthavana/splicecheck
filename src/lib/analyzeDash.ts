@@ -16,6 +16,7 @@ import {
 } from "./dash";
 import {
   parseSpliceInfoSection,
+  validateDescriptorUpid,
   START_TYPES,
   END_TYPES,
   SEGMENTATION_TYPES,
@@ -663,6 +664,19 @@ export function analyzeMpd(mpd: MpdDocument, label = "MPD"): RenditionAnalysis {
       if (sm) {
         sm.isAd = true;
         sm.segmentationType = s.typeName;
+      }
+
+      // The same check as HLS: a cue that parses and identifies nothing.
+      for (const d of s.descriptors) {
+        const problem = validateDescriptorUpid(d);
+        if (!problem) continue;
+        add(
+          "warning",
+          problem.code,
+          `Break ${index} carries a ${d.upidTypeName} UPID that is not well formed`,
+          problem.detail,
+          { breakIndex: index, atTime: startTime },
+        );
       }
 
       if (!end && !boundedByDuration) {

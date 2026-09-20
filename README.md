@@ -264,9 +264,13 @@ itself in a unit test; it shows up after an hour of real traffic.
 ## What it checks
 
 **SCTE-35** — full `splice_info_section` decoder per ANSI/SCTE 35 2022:
-`splice_insert`, `time_signal`, segmentation descriptors, UPIDs (including MPU
-format identifiers with their private payload, and MID sub-UPIDs), break
-durations, and CRC-32 validation. Accepts base64 or hex.
+`splice_insert`, `time_signal`, `splice_schedule`, segmentation descriptors,
+UPIDs (including MPU format identifiers with their private payload, and MID
+sub-UPIDs), break durations, and CRC-32 validation. Accepts base64 or hex.
+UPIDs are validated against the format their type declares, not merely
+rendered: `UPID_MALFORMED_ADID`, `UPID_WRONG_LENGTH`, `UPID_MALFORMED_URI`,
+`UPID_MID_TRUNCATED` and the rest catch a cue that parses perfectly and
+identifies nothing.
 
 **HLS**
 
@@ -278,6 +282,8 @@ durations, and CRC-32 validation. Accepts base64 or hex.
 | `BREAK_OVERRUN` / `BREAK_UNDERRUN` | Segments don't add up to the signalled duration — slate at the tail, or a truncated last ad |
 | `SIGNAL_DURATION_DISAGREEMENT` | Manifest duration ≠ SCTE-35 duration; players and SSAI honour different ones |
 | `NO_DISCONTINUITY_AT_BREAK_START/END` | Splice point unmarked in a stitched stream — freezes on the return |
+| `MAP_CHANGED_WITHOUT_DISCONTINUITY` | The avail carries a different `EXT-X-MAP` — a different decoder configuration — with nothing telling the player to re-initialise |
+| `AD_CONTAINER_MISMATCH` | MPEG-TS ad segments spliced into a CMAF presentation, or the reverse; no discontinuity makes that work |
 | `DATERANGE_DUPLICATE_ID` / `EVENT_ID_REUSED` | Players and ad platforms deduplicate on these and discard the later ones |
 | `DATERANGE_START_DATE_MISMATCH` | A DATERANGE's START-DATE disagrees with where it sits, so schedulers and players fire the break at different instants |
 | `TARGETDURATION_EXCEEDED` / `PDT_DISCONTINUITY` | RFC 8216 violations and an inconsistent timeline |
@@ -476,7 +482,7 @@ clean run stays silent.
 ## Testing
 
 ```bash
-npm test      # 197 tests across 11 files
+npm test      # 207 tests across 12 files
 ```
 
 - **Spec vectors** — the SCTE-35 decoder is asserted against published ANSI/SCTE

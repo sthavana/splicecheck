@@ -27,6 +27,12 @@ export interface HlsSegment {
   discontinuity: boolean;
   mediaSequence: number;
   lineNumber: number;
+  /**
+   * The EXT-X-MAP in force for this segment. The init segment carries the
+   * decoder configuration, so a change here is a change of encode — which is
+   * exactly what happens when ad content is spliced in.
+   */
+  mapUri?: string;
 }
 
 export interface HlsMarker {
@@ -194,6 +200,7 @@ export function parseMedia(text: string, uri: string): MediaPlaylist {
   let discontinuitySequence = 0;
   let targetDuration: number | undefined;
   let partTargetDuration: number | undefined;
+  let currentMap: string | undefined;
   const parts: HlsPart[] = [];
   const renditionReports: { uri: string; lastMsn?: number; lastPart?: number }[] = [];
   let serverControl: ServerControl | undefined;
@@ -249,6 +256,7 @@ export function parseMedia(text: string, uri: string): MediaPlaylist {
         discontinuity: pendingDiscontinuity,
         mediaSequence: mediaSequence + segIndex,
         lineNumber: ln,
+        mapUri: currentMap,
       };
       segments.push(seg);
       for (const m of pendingMarkers) {
@@ -286,6 +294,9 @@ export function parseMedia(text: string, uri: string): MediaPlaylist {
     } else if (line.startsWith("#EXT-X-PROGRAM-DATE-TIME:")) {
       const t = Date.parse(line.slice("#EXT-X-PROGRAM-DATE-TIME:".length).trim());
       if (!Number.isNaN(t)) pendingPdt = t;
+    } else if (line.startsWith("#EXT-X-MAP:")) {
+      const a = parseAttributes(line.slice("#EXT-X-MAP:".length));
+      currentMap = a.URI ? resolveUri(uri, a.URI) : undefined;
     } else if (line.startsWith("#EXT-X-PART-INF:")) {
       const a = parseAttributes(line.slice("#EXT-X-PART-INF:".length));
       partTargetDuration = a["PART-TARGET"] ? Number(a["PART-TARGET"]) : undefined;

@@ -9,6 +9,7 @@
 import type { HlsMarker, MediaPlaylist, Variant } from "./hls";
 import {
   parseSpliceInfoSection,
+  validateDescriptorUpid,
   START_TYPES,
   END_TYPES,
   TYPE_PAIRS,
@@ -689,6 +690,75 @@ export function analyzeRendition(
           { lineNumber: outM.lineNumber, breakIndex, atTime: outM.startTime },
         );
       }
+    }
+
+    // What HLS can say about the ad's encode.
+    //
+    // A media playlist states no codecs — those live in the master, per
+    // variant — so the ad's encode cannot be read directly. What can be read is
+    // the initialisation segment and the container, and both change when
+    // content from somewhere else is spliced in.
+    if (inMarker && !clipped && inside.length > 0) {
+      const before = segs[startIdx - 1];
+      const after = segs[endIdx];
+      const insideMaps = new Set(inside.map((x) => x.mapUri).filter(Boolean));
+      const outsideMaps = new Set(
+        [before?.mapUri, after?.mapUri].filter(Boolean) as string[],
+      );
+
+      // A different init segment is a different decoder configuration. That is
+      // expected for an ad, and it is exactly why the splice needs marking.
+      if (insideMaps.size > 0 && outsideMaps.size > 0) {
+        const shared = [...insideMaps].some((m) => outsideMaps.has(m as string));
+        if (!shared && !b.discontinuityAtStart) {
+          add(
+            "error",
+            "MAP_CHANGED_WITHOUT_DISCONTINUITY",
+            `Break ${breakIndex} changes EXT-X-MAP without a discontinuity`,
+            `The segments inside this avail carry a different initialisation segment than the content around them, which means a different decoder configuration — a different encode. Without EXT-X-DISCONTINUITY a player is not told to re-initialise, so it feeds the new configuration to a decoder still set up for the old one. That is a hard failure rather than a glitch: most players show black or stall until the next discontinuity.`,
+            { lineNumber: outM.lineNumber, breakIndex, atTime: outM.startTime },
+          );
+        }
+      }
+
+      // A container change mid-presentation is a stronger claim than a codec
+      // change and is visible from the segment names alone.
+      const ext = (u: string) => (u.split("?")[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? "").toLowerCase();
+      const insideExts = new Set(inside.map((x) => ext(x.uri)).filter(Boolean));
+      const outsideExts = new Set(
+        [before?.uri, after?.uri].filter(Boolean).map((u) => ext(u as string)).filter(Boolean),
+      );
+      const container = (e: string) => (e === "ts" ? "mpeg-ts" : e === "m4s" || e === "mp4" || e === "cmfv" ? "cmaf" : e);
+      const insideFamilies = new Set([...insideExts].map(container));
+      const outsideFamilies = new Set([...outsideExts].map(container));
+      if (
+        insideFamilies.size > 0 &&
+        outsideFamilies.size > 0 &&
+        ![...insideFamilies].some((f) => outsideFamilies.has(f))
+      ) {
+        add(
+          "error",
+          "AD_CONTAINER_MISMATCH",
+          `Break ${breakIndex} splices ${[...insideFamilies].join("/")} into a ${[...outsideFamilies].join("/")} presentation`,
+          `The avail's segments are in a different container than the programme around them. A player set up to demux one cannot demux the other, and no discontinuity tag makes that work — the ad has been conditioned for a different packaging than the stream it was inserted into.`,
+          { lineNumber: outM.lineNumber, breakIndex, atTime: outM.startTime },
+        );
+      }
+    }
+
+    // A malformed UPID is a valid cue that identifies nothing. The break opens
+    // on time and the ad system finds no creative to match, which is an
+    // unfilled avail for a reason nothing else in the chain reports.
+    for (const d of descs) {
+      const problem = validateDescriptorUpid(d);
+      if (!problem) continue;
+      add(
+        "warning",
+        problem.code,
+        `Break ${breakIndex} carries a ${d.upidTypeName} UPID that is not well formed`,
+        problem.detail,
+        { lineNumber: outM.lineNumber, breakIndex, atTime: outM.startTime },
+      );
     }
 
     if (hasAnyDiscontinuity && inMarker && !clipped && !b.discontinuityAtStart) {

@@ -71,6 +71,26 @@ export interface SpliceInsert {
   availsExpected?: number;
 }
 
+/**
+ * One event of a splice_schedule. Where splice_insert says "splice now, or at
+ * this PTS", a schedule states a list of future splices against UTC — which is
+ * why it is rare in streaming: it presumes a clock the packager and the encoder
+ * agree on, and everything downstream works in PTS.
+ */
+export interface SpliceScheduleEvent {
+  spliceEventId: number;
+  cancel: boolean;
+  outOfNetwork?: boolean;
+  programSplice?: boolean;
+  /** Seconds since the epoch, as the 32-bit UTC field states it. */
+  utcSpliceTime?: number;
+  utcSpliceTimeIso?: string;
+  breakDuration?: BreakDuration;
+  uniqueProgramId?: number;
+  availNum?: number;
+  availsExpected?: number;
+}
+
 export interface SegmentationDescriptor {
   tag: 0x02;
   segmentationEventId: number;
@@ -118,6 +138,7 @@ export interface SpliceInfoSection {
   spliceCommandName: string;
   spliceInsert?: SpliceInsert;
   timeSignal?: SpliceTime;
+  spliceSchedule?: SpliceScheduleEvent[];
   descriptors: SpliceDescriptor[];
   crc32: number;
   crcValid: boolean;
@@ -231,6 +252,123 @@ const DESCRIPTOR_TAGS: Record<number, string> = {
   0x03: "time_descriptor",
   0x04: "audio_descriptor",
 };
+
+/**
+ * Whether a UPID is well formed for the type it claims to be.
+ *
+ * The decoder will render any bytes as a UPID, and a cue carrying a malformed
+ * one is still a valid cue — it parses, its CRC validates, and the break opens
+ * on time. What fails is downstream: an ad system looks the creative up by this
+ * value and finds nothing, so the avail goes unfilled for a reason nothing in
+ * the signalling chain reports.
+ */
+export interface UpidProblem {
+  code: string;
+  detail: string;
+}
+
+/** Types whose length the specification fixes. */
+const UPID_FIXED_LENGTH: Record<number, number> = {
+  0x06: 8, // ISAN
+  0x08: 8, // TI, a 64-bit value
+  0x0a: 12, // EIDR, the compact binary form
+  0x10: 16, // UUID
+};
+
+/** Convenience for callers that hold a descriptor rather than raw bytes. */
+export function validateDescriptorUpid(d: SegmentationDescriptor): UpidProblem | undefined {
+  const hex = d.upidHex ?? "";
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return validateUpid(d.upidType, bytes, d.upidText ?? "");
+}
+
+export function validateUpid(type: number, bytes: Uint8Array, text: string): UpidProblem | undefined {
+  // Type 0 declares that no UPID is carried, so bytes with it are contradictory.
+  if (type === 0x00) {
+    return bytes.length > 0
+      ? {
+          code: "UPID_TYPE_NOT_USED",
+          detail: `The descriptor declares segmentation_upid_type 0 ("Not Used") but carries ${bytes.length} bytes anyway. Receivers are entitled to ignore the value entirely, so whatever it identifies is not reaching the ad system.`,
+        }
+      : undefined;
+  }
+
+  if (bytes.length === 0) {
+    return {
+      code: "UPID_EMPTY",
+      detail: `The descriptor declares a ${UPID_TYPES[type] ?? "0x" + type.toString(16)} UPID and then carries none. The break is signalled but nothing identifies what should run in it, so an ad system has no key to decision against.`,
+    };
+  }
+
+  const fixed = UPID_FIXED_LENGTH[type];
+  if (fixed !== undefined && bytes.length !== fixed) {
+    return {
+      code: "UPID_WRONG_LENGTH",
+      detail: `A ${UPID_TYPES[type]} UPID is ${fixed} bytes; this one is ${bytes.length}. Parsers that read it positionally will take the wrong bytes, and those that validate the length will discard it.`,
+    };
+  }
+
+  switch (type) {
+    case 0x03: {
+      // Ad-ID: four-character advertiser prefix, then seven, with an optional
+      // trailing letter for the definition. Always upper case.
+      if (!/^[A-Z0-9]{11,12}$/.test(text)) {
+        return {
+          code: "UPID_MALFORMED_ADID",
+          detail: `"${text}" is not a valid Ad-ID. The format is eleven alphanumeric characters — a four-character advertiser prefix and a seven-character code — with an optional twelfth for the definition, all upper case. Ad systems look creatives up by this exact string, so a malformed one resolves to nothing.`,
+        };
+      }
+      return undefined;
+    }
+    case 0x0f: {
+      try {
+        new URL(text);
+      } catch {
+        return {
+          code: "UPID_MALFORMED_URI",
+          detail: `The descriptor declares a URI UPID but "${text}" does not parse as one. Anything resolving it will fail, and most implementations will simply drop the segmentation descriptor.`,
+        };
+      }
+      return undefined;
+    }
+    case 0x0c: {
+      // MPU: a four-byte format identifier, then private data. Operators
+      // commonly put JSON in the private part.
+      if (bytes.length <= 4) {
+        return {
+          code: "UPID_MPU_NO_PRIVATE_DATA",
+          detail: `An MPU UPID carries a four-byte format identifier followed by private data, and this one carries only the identifier. Whatever the operator encodes there — pod metadata, a placement id — is absent.`,
+        };
+      }
+      return undefined;
+    }
+    case 0x0d: {
+      // MID is a concatenation of sub-UPIDs, each with its own type and length.
+      let i = 0;
+      let count = 0;
+      while (i + 2 <= bytes.length) {
+        const len = bytes[i + 1];
+        if (i + 2 + len > bytes.length) {
+          return {
+            code: "UPID_MID_TRUNCATED",
+            detail: `The MID's sub-UPID ${count} declares ${len} bytes but only ${bytes.length - i - 2} remain. The concatenation is malformed, so every sub-UPID after this point is unreadable.`,
+          };
+        }
+        i += 2 + len;
+        count++;
+      }
+      return count === 0
+        ? {
+            code: "UPID_MID_EMPTY",
+            detail: "The descriptor declares a MID — a concatenation of sub-UPIDs — but no complete sub-UPID could be read from it.",
+          }
+        : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
 
 /** MPEG-2 style CRC-32: poly 0x04C11DB7, init 0xFFFFFFFF, no reflection, no final XOR. */
 export function crc32Mpeg(bytes: Uint8Array): number {
@@ -457,6 +595,44 @@ export function parseSpliceInfoSection(payload: string): SpliceInfoSection {
     out.spliceInsert = si;
   } else if (spliceCommandType === 0x06) {
     out.timeSignal = readSpliceTime(r);
+  } else if (spliceCommandType === 0x04) {
+    // splice_schedule: a count, then that many events stated against UTC
+    // rather than PTS (2022 section 9.3.2).
+    const count = r.read(8);
+    const events: SpliceScheduleEvent[] = [];
+    for (let i = 0; i < count; i++) {
+      const ev: SpliceScheduleEvent = { spliceEventId: r.read(32), cancel: r.read(1) === 1 };
+      r.skip(7);
+      if (!ev.cancel) {
+        ev.outOfNetwork = r.read(1) === 1;
+        ev.programSplice = r.read(1) === 1;
+        const durationFlag = r.read(1) === 1;
+        r.skip(5);
+        if (ev.programSplice) {
+          const utc = r.read(32);
+          ev.utcSpliceTime = utc;
+          // The field is seconds since the epoch; 0 means "as soon as possible".
+          ev.utcSpliceTimeIso = utc > 0 ? new Date(utc * 1000).toISOString() : undefined;
+        } else {
+          const componentCount = r.read(8);
+          for (let c = 0; c < componentCount; c++) {
+            r.skip(8); // component_tag
+            r.skip(32); // utc_splice_time
+          }
+        }
+        if (durationFlag) {
+          const autoReturn = r.read(1) === 1;
+          r.skip(6);
+          const ticks = r.read(33);
+          ev.breakDuration = { autoReturn, ticks, seconds: ticks / 90000 };
+        }
+        ev.uniqueProgramId = r.read(16);
+        ev.availNum = r.read(8);
+        ev.availsExpected = r.read(8);
+      }
+      events.push(ev);
+    }
+    out.spliceSchedule = events;
   }
 
   // splice_command_length may be 0xFFF ("unknown"); fall back to where parsing landed.
