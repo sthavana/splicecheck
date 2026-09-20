@@ -461,13 +461,33 @@ media playlist per rung it cares about.
 
 ### Structure
 
-```
-MPD  @type=dynamic|static  @availabilityStartTime  @timeShiftBufferDepth
- └── Period  @id @start @duration              (an ad break opens a new one)
-      └── AdaptationSet  @contentType @lang    (one track: video, one language)
-           └── Representation  @id @bandwidth  (one rung)
-                └── SegmentTemplate / SegmentList / SegmentBase
-```
+<figure>
+<svg viewBox="0 0 700 340" role="img" aria-label="The MPD structure drawn as nested boxes: an MPD contains Periods, each Period contains AdaptationSets, each AdaptationSet contains Representations, and each Representation contains a SegmentTemplate, SegmentList or SegmentBase.">
+  <rect x="1" y="1" width="698" height="300" rx="4" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+  <text x="16" y="26" font-family="Archivo, sans-serif" font-size="14" fill="var(--accent)">MPD</text>
+  <text x="62" y="26" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--accent)" opacity="0.85">@type=dynamic|static  @availabilityStartTime  @timeShiftBufferDepth</text>
+  <rect x="24" y="44" width="652" height="236" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="40" y="68" font-family="Archivo, sans-serif" font-size="13" fill="currentColor">Period</text>
+  <text x="96" y="68" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">@id @start @duration</text>
+  <text x="660" y="68" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity="0.6" text-anchor="end">an ad break opens a new one</text>
+  <rect x="48" y="86" width="604" height="180" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="64" y="110" font-family="Archivo, sans-serif" font-size="13" fill="currentColor">AdaptationSet</text>
+  <text x="168" y="110" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">@contentType @lang</text>
+  <text x="636" y="110" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity="0.6" text-anchor="end">one track: video, or one language of audio</text>
+  <rect x="72" y="128" width="556" height="124" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="88" y="152" font-family="Archivo, sans-serif" font-size="13" fill="currentColor">Representation</text>
+  <text x="196" y="152" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">@id @bandwidth @codecs</text>
+  <text x="612" y="152" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity="0.6" text-anchor="end">one rung of the ladder</text>
+  <rect x="96" y="170" width="508" height="68" rx="3" fill="none" stroke="currentColor" stroke-width="1.25" stroke-dasharray="3 3"/>
+  <text x="112" y="194" font-family="Archivo, sans-serif" font-size="13" fill="currentColor">SegmentTemplate</text>
+  <text x="232" y="194" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">/ SegmentList / SegmentBase</text>
+  <text x="112" y="212" font-family="Archivo, sans-serif" font-size="10.5" fill="currentColor" opacity="0.6">how the segment URLs are built, and when each becomes available</text>
+  <text x="112" y="228" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.55">$RepresentationID$ · $Number$ · $Time$</text>
+  <text x="16" y="326" font-family="Archivo, sans-serif" font-size="11" fill="currentColor" opacity="0.7">Nesting is containment: one MPD, many Periods, many AdaptationSets in each, many Representations in each.</text>
+</svg>
+<figcaption>An ad break in DASH is a Period, which is why multi-period manifests and ad
+insertion are the same subject. Everything below the Period repeats for every break.</figcaption>
+</figure>
 
 - **Period** is a time span of the presentation. Most live streams have one,
   until an ad break splits them.
