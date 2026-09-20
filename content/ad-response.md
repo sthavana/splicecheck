@@ -2,8 +2,9 @@
 
 Everything else about ad insertion is about the *signal*: where the break is, how
 long it runs, how that gets from an encoder to a manifest to a stitcher. This is
-about the other half. The signal says an avail exists. The response says what
-goes in it.
+about the other half. The signal says an **avail** exists — a slot in the
+programme where advertising may be inserted, bracketed by a cue out and a cue
+in. The response says what goes in it.
 
 The two halves fail in completely different ways, and they get blamed on each
 other constantly. An avail that is signalled perfectly and filled with a creative
@@ -59,8 +60,8 @@ At its simplest it is one ad, with one creative, with one media file:
 
 Five things in that document matter more than the rest.
 
-**`<Duration>`** is what a stitcher lays the pod out against, before it fetches
-anything at all. It is a declaration, not a measurement — and when it disagrees
+**`<Duration>`** is what a stitcher lays the break out against, before it
+fetches anything at all. It is a declaration, not a measurement — and when it disagrees
 with the actual media, the media wins and the timeline is wrong.
 
 **`<MediaFile>`** is the only part that is actually video. Everything else is
@@ -72,7 +73,8 @@ that plays without firing one is inventory delivered for free.
 
 **`<Error>`** is how the decision service finds out its creative failed. Leave it
 out and the ad server's fill rate stays beautiful while viewers watch slate —
-two teams looking at different numbers, both of them correct.
+a holding card, or black — two teams looking at different numbers, both of them
+correct.
 
 **`<UniversalAdId>`** identifies the creative across systems. Without it,
 deduplication and frequency capping are guesswork.
@@ -188,8 +190,8 @@ ladder. Two mismatches matter:
   at 1.3 Mbps is heavier than anything that viewer has ever sustained. The
   rebuffer lands in the middle of the ad.
 
-Conditioning ads — transcoding them to match the content ladder's codec, GOP
-structure and rungs — is normally a separate pipeline that runs before the ad is
+**Conditioning** ads — transcoding them in advance to match the content ladder's
+codec, GOP structure and rungs — is normally a separate pipeline that runs before the ad is
 ever eligible. When it is missing or incomplete, the symptom appears at playback
 and looks like a delivery fault.
 
@@ -202,19 +204,27 @@ the ladder's audio codecs when doing so — comparing an ad's video against
 
 ## 4. Pods, and fitting the hole
 
-An avail is rarely one ad. A ninety-second break is typically three thirties, or
-a sixty and a thirty — a **pod**. VAST expresses this with multiple `<Ad>`
-elements carrying a `sequence` attribute.
+An avail is rarely one ad. Commercials are sold in standard lengths — usually
+fifteen, thirty or sixty seconds — so a ninety-second break is filled by a
+combination that adds up to ninety: three thirty-second spots, or a sixty and a
+thirty, or six fifteens. That group of ads, played back to back inside one
+break, is a **pod**. VAST expresses it as several `<Ad>` elements carrying a
+`sequence` attribute.
+
+The avail is the container the SCTE-35 defines. The pod is what the decision
+service arranges inside it, out of pieces that come in fixed sizes.
 
 The arithmetic is unforgiving, because the break has a fixed length that
 something else already decided:
 
-- **The pod runs long.** The stitcher either truncates the last ad — which is
-  then unbillable, and the advertiser is entitled to object — or it runs past the
-  return and cuts into programme content.
-- **The pod runs short.** The remainder is slate, black, or an early return. This
-  is *under-fill*, and it is directly measurable lost revenue rather than a
-  delivery fault.
+- **The pod runs long.** Four thirties returned for a ninety-second break. The
+  stitcher either truncates the last ad — which is then unbillable, and the
+  advertiser is entitled to object, because they paid for a spot that did not
+  finish — or it runs past the return and cuts into programme content.
+- **The pod runs short.** Two thirties returned for a ninety-second break, so
+  thirty seconds has nothing in it. The remainder is slate, black, or an early
+  return to programme. This is *under-fill*, and it is directly measurable lost
+  revenue rather than a delivery fault.
 - **The pod is empty.** No ads returned at all. The break collapses and content
   resumes, which is correct behaviour and completely invisible.
 

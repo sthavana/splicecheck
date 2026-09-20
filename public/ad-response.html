@@ -88,8 +88,9 @@
         <main>
   <p>Everything else about ad insertion is about the <em>signal</em>: where the break is, how
 long it runs, how that gets from an encoder to a manifest to a stitcher. This is
-about the other half. The signal says an avail exists. The response says what
-goes in it.</p>
+about the other half. The signal says an <strong>avail</strong> exists — a slot in the
+programme where advertising may be inserted, bracketed by a cue out and a cue
+in. The response says what goes in it.</p>
 <p>The two halves fail in completely different ways, and they get blamed on each
 other constantly. An avail that is signalled perfectly and filled with a creative
 the packager cannot use is still an unfilled avail — and from the manifest, it
@@ -133,8 +134,8 @@ decision service and whatever is going to play the ad.</p>
 &lt;/VAST&gt;
 </code></pre>
 <p>Five things in that document matter more than the rest.</p>
-<p><strong><code>&lt;Duration&gt;</code></strong> is what a stitcher lays the pod out against, before it fetches
-anything at all. It is a declaration, not a measurement — and when it disagrees
+<p><strong><code>&lt;Duration&gt;</code></strong> is what a stitcher lays the break out against, before it
+fetches anything at all. It is a declaration, not a measurement — and when it disagrees
 with the actual media, the media wins and the timeline is wrong.</p>
 <p><strong><code>&lt;MediaFile&gt;</code></strong> is the only part that is actually video. Everything else is
 metadata about it. A response can be perfectly well-formed and contain no media
@@ -143,7 +144,8 @@ anyone downstream can use.</p>
 that plays without firing one is inventory delivered for free.</p>
 <p><strong><code>&lt;Error&gt;</code></strong> is how the decision service finds out its creative failed. Leave it
 out and the ad server&#39;s fill rate stays beautiful while viewers watch slate —
-two teams looking at different numbers, both of them correct.</p>
+a holding card, or black — two teams looking at different numbers, both of them
+correct.</p>
 <p><strong><code>&lt;UniversalAdId&gt;</code></strong> identifies the creative across systems. Without it,
 deduplication and frequency capping are guesswork.</p>
 <div class="xref"><span class="tag">In SpliceCheck</span><p>the ad response tool reads all of these and reports the ones
@@ -279,8 +281,8 @@ packager&#39;s.</li>
 at 1.3 Mbps is heavier than anything that viewer has ever sustained. The
 rebuffer lands in the middle of the ad.</li>
 </ul>
-<p>Conditioning ads — transcoding them to match the content ladder&#39;s codec, GOP
-structure and rungs — is normally a separate pipeline that runs before the ad is
+<p><strong>Conditioning</strong> ads — transcoding them in advance to match the content ladder&#39;s
+codec, GOP structure and rungs — is normally a separate pipeline that runs before the ad is
 ever eligible. When it is missing or incomplete, the symptom appears at playback
 and looks like a delivery fault.</p>
 <div class="xref"><span class="tag">In SpliceCheck</span><p>give it the stream URL alongside the response and it compares
@@ -289,18 +291,25 @@ the ladder&#39;s audio codecs when doing so — comparing an ad&#39;s video agai
 <code>mp4a</code> would report a mismatch on every well-formed stream there is.</p></div>
 <hr>
 </section><section id="4-pods-and-fitting-the-hole"><h2><span class="sec-num">04</span>Pods, and fitting the hole</h2>
-<p>An avail is rarely one ad. A ninety-second break is typically three thirties, or
-a sixty and a thirty — a <strong>pod</strong>. VAST expresses this with multiple <code>&lt;Ad&gt;</code>
-elements carrying a <code>sequence</code> attribute.</p>
+<p>An avail is rarely one ad. Commercials are sold in standard lengths — usually
+fifteen, thirty or sixty seconds — so a ninety-second break is filled by a
+combination that adds up to ninety: three thirty-second spots, or a sixty and a
+thirty, or six fifteens. That group of ads, played back to back inside one
+break, is a <strong>pod</strong>. VAST expresses it as several <code>&lt;Ad&gt;</code> elements carrying a
+<code>sequence</code> attribute.</p>
+<p>The avail is the container the SCTE-35 defines. The pod is what the decision
+service arranges inside it, out of pieces that come in fixed sizes.</p>
 <p>The arithmetic is unforgiving, because the break has a fixed length that
 something else already decided:</p>
 <ul>
-<li><strong>The pod runs long.</strong> The stitcher either truncates the last ad — which is
-then unbillable, and the advertiser is entitled to object — or it runs past the
-return and cuts into programme content.</li>
-<li><strong>The pod runs short.</strong> The remainder is slate, black, or an early return. This
-is <em>under-fill</em>, and it is directly measurable lost revenue rather than a
-delivery fault.</li>
+<li><strong>The pod runs long.</strong> Four thirties returned for a ninety-second break. The
+stitcher either truncates the last ad — which is then unbillable, and the
+advertiser is entitled to object, because they paid for a spot that did not
+finish — or it runs past the return and cuts into programme content.</li>
+<li><strong>The pod runs short.</strong> Two thirties returned for a ninety-second break, so
+thirty seconds has nothing in it. The remainder is slate, black, or an early
+return to programme. This is <em>under-fill</em>, and it is directly measurable lost
+revenue rather than a delivery fault.</li>
 <li><strong>The pod is empty.</strong> No ads returned at all. The break collapses and content
 resumes, which is correct behaviour and completely invisible.</li>
 </ul>
