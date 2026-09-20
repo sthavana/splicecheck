@@ -277,3 +277,95 @@ test("a ladder's audio codecs are not compared against the ad's video", () => {
 test("an audio-only ladder makes no claim about the ad's video codec", () => {
   assert.ok(!codes(GOOD, { codecs: ["mp4a.40.2"], serverSide: true }).some((c) => c.includes("CODEC_MISMATCH")));
 });
+
+/* ------------------------------- a fault in the response, seen elsewhere --
+ * The argument the whole project exists to make: the two halves of ad
+ * insertion fail into each other. A fault in the ad response surfaces a layer
+ * downstream as an avail that did not fill, which in a manifest looks like a
+ * signalling fault and gets reported as one.
+ *
+ * These assert the shape of that, per fault: what the response says, what the
+ * manifest says, and what the comparison says. The rows where the manifest is
+ * silent are the point.
+ */
+
+function trace(faults: Record<string, boolean> = {}) {
+  const r = runChain({ ...DEFAULT_CONFIG, adDecision: true, faults });
+  const manifest = r.analysis.ssai;
+  const cmp = r.analysis.comparison;
+  return {
+    decision: r.decisions[0],
+    vastCodes: r.decisions[0].findings.map((f) => f.code),
+    manifestCodes: "error" in manifest
+      ? []
+      : manifest.renditions.flatMap((x) => x.findings).map((f) => f.code),
+    statuses: "error" in cmp ? [] : cmp.avails.map((a) => a.status),
+  };
+}
+
+test("a decision that works produces a clean manifest and a filled avail", () => {
+  const t = trace();
+  assert.deepEqual(t.vastCodes, []);
+  assert.deepEqual(t.manifestCodes, []);
+  assert.deepEqual(t.statuses, ["filled"]);
+  assert.equal(t.decision.accepted.length, 3);
+});
+
+test("a VPAID-only response is rejected by the stitcher and invisible in the manifest", () => {
+  const t = trace({ vpaidOnly: true });
+  assert.ok(t.vastCodes.includes("VAST_EXECUTABLE_CREATIVE"));
+  assert.equal(t.decision.accepted.length, 0);
+  assert.equal(t.decision.rejected.length, 3);
+  // The manifest the stitcher produces is perfectly well formed.
+  assert.deepEqual(t.manifestCodes, [], "nothing in the manifest is wrong");
+  // Only having the source to compare against catches it.
+  assert.deepEqual(t.statuses, ["passthrough"]);
+});
+
+test("a decision that misses its budget leaves both documents blameless", () => {
+  // The strongest case: the VAST is valid and the manifest is valid. The ad
+  // simply did not arrive in time, and nothing either side records that.
+  const t = trace({ slowChain: true });
+  assert.deepEqual(t.vastCodes, [], "the response itself is correct");
+  assert.deepEqual(t.manifestCodes, [], "and so is the manifest");
+  assert.ok(t.decision.elapsedMs > t.decision.budgetMs);
+  assert.deepEqual(t.statuses, ["passthrough"]);
+});
+
+test("no fill leaves the break standing with programme underneath", () => {
+  const t = trace({ noFill: true });
+  assert.ok(t.vastCodes.includes("VAST_NO_FILL"));
+  // The break must not be left malformed: a return with no departure would be
+  // a different fault, and would be reported as one.
+  assert.ok(!t.manifestCodes.includes("ORPHAN_CUE_IN"));
+  assert.deepEqual(t.statuses, ["passthrough"]);
+});
+
+test("a pod that does not fit shows up in both layers, agreeing", () => {
+  const short = trace({ podTooShort: true });
+  assert.ok(short.vastCodes.includes("VAST_POD_UNDERFILLS_AVAIL"));
+  assert.ok(short.manifestCodes.includes("BREAK_UNDERRUN"));
+  assert.deepEqual(short.statuses, ["under-filled"]);
+
+  const long = trace({ podTooLong: true });
+  assert.ok(long.vastCodes.includes("VAST_POD_OVERRUNS_AVAIL"));
+  assert.ok(long.manifestCodes.includes("BREAK_OVERRUN"));
+  assert.deepEqual(long.statuses, ["over-filled"]);
+});
+
+test("a creative in the wrong codec is visible only in the response", () => {
+  // The inverse case, and worth having: the manifest is correct, the avail is
+  // filled, the fill rate is 100%, and the viewer still gets a decoder reset.
+  const t = trace({ creativeCodecMismatch: true });
+  assert.ok(t.vastCodes.includes("VAST_CODEC_MISMATCH"));
+  assert.deepEqual(t.manifestCodes, []);
+  assert.deepEqual(t.statuses, ["filled"]);
+});
+
+test("without a decision the chain behaves exactly as it did before", () => {
+  const r = runChain({ ...DEFAULT_CONFIG, faults: {} });
+  assert.deepEqual(r.decisions, []);
+  const cmp = r.analysis.comparison;
+  assert.ok(!("error" in cmp));
+  assert.deepEqual(("error" in cmp ? [] : cmp.avails).map((a) => a.status), ["filled"]);
+});

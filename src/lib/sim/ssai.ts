@@ -40,6 +40,12 @@ export interface SsaiSpec {
    * not exist as far as it is concerned, and the inventory is simply lost.
    */
   visibleAvailIds?: number[];
+  /**
+   * The creatives an ad decision yielded, per avail. When present the stitcher
+   * uses only these — which is the point: a response it cannot use produces an
+   * under-filled avail in the manifest, with nothing in the manifest to say why.
+   */
+  decided?: Map<number, Creative[]>;
 }
 
 export interface StitchedAvail {
@@ -158,8 +164,50 @@ export function stitch(
       i++;
     }
     const availStartPdt = availSegments[0].pdtMs;
+    // A decision, where one was made, replaces the stitcher's own pool: it can
+    // only splice what came back and survived inspection.
+    const decidedPod = ssai.decided?.get(avail.id);
+
+    // A decision that returned nothing usable leaves the stitcher with nothing
+    // to splice, and the correct behaviour is to leave the break as it found
+    // it: markers intact, programme underneath. Emitting a return with no
+    // departure would be a malformed manifest, which is a different fault from
+    // an unfilled avail and would be reported as one.
+    if (decidedPod && decidedPod.length === 0) {
+      let firstOfAvail = true;
+      for (const seg of availSegments) {
+        out.push({
+          uri: seg.uri,
+          durationSec: seg.durationSec,
+          pdtMs: seg.pdtMs,
+          discontinuity: firstOfAvail && !ssai.dropDiscontinuity,
+          markers: firstOfAvail ? [`#EXT-X-CUE-OUT:${fmt(avail.durationSec)}`] : [],
+        });
+        firstOfAvail = false;
+      }
+      const after = slice[i];
+      if (after) {
+        out.push({
+          uri: after.uri,
+          durationSec: after.durationSec,
+          pdtMs: after.pdtMs,
+          discontinuity: !ssai.dropDiscontinuity,
+          markers: ["#EXT-X-CUE-IN"],
+        });
+        i++;
+      }
+      stitched.push({
+        availId: avail.id,
+        signalledSec: avail.durationSec,
+        deliveredSec: 0,
+        creatives: [],
+        mode: ssai.mode,
+      });
+      continue;
+    }
+
     const target = targetFill(ssai.mode, avail.snappedDurationSec);
-    const pod = buildPod(pool, target);
+    const pod = decidedPod ?? buildPod(pool, target);
     const podSec = pod.reduce((n, c) => n + c.durationSec, 0);
 
     let cursor = 0;
@@ -199,7 +247,7 @@ export function stitch(
     // measurably short downstream. Padding it back out to full length would be
     // a different failure — the break looks correct and only the revenue is
     // missing — so that is not what this mode models.
-    if (ssai.mode !== "under-fill" && podSec < avail.snappedDurationSec - 0.001) {
+    if (ssai.mode !== "under-fill" && !decidedPod && podSec < avail.snappedDurationSec - 0.001) {
       let remaining = avail.snappedDurationSec - podSec;
       for (const seg of availSegments) {
         if (remaining <= 0.001) break;

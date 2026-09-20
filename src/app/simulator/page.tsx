@@ -8,6 +8,7 @@ import type { SimConfig, Stage } from "@/lib/sim/chain";
 import type { EncoderSignal } from "@/lib/sim/timeline";
 import type { StitchedAvail } from "@/lib/sim/ssai";
 import type { ClientEvent, CsaiResult } from "@/lib/sim/csai";
+import type { AdDecision } from "@/lib/sim/decision";
 
 interface SimResponse {
   config: SimConfig;
@@ -17,6 +18,10 @@ interface SimResponse {
   segmentCount: number;
   ssai: { avails: StitchedAvail[]; beacons: { availId: number; creative: string; event: string; atSec: number }[]; uri: string };
   csai?: CsaiResult;
+  decisions?: Pick<
+    AdDecision,
+    "availId" | "availSeconds" | "elapsedMs" | "budgetMs" | "accepted" | "rejected" | "findings"
+  >[];
   analysis: {
     origin: RunResult | { error: string };
     ssai: RunResult | { error: string };
@@ -59,6 +64,12 @@ const FAULTS: Fault[] = [
   { key: "availNeverReturns", label: "Avail never returns", blurb: "The ad Period keeps growing past the duration it declared.", stage: "SSAI", requires: { protocol: "dash", adMode: "ssai" } },
   { key: "periodGap", label: "Gap between Periods", blurb: "The next Period starts later than the previous one ended.", stage: "SSAI", requires: { protocol: "dash", adMode: "ssai" } },
   { key: "dropPresentationTimeOffset", label: "Drop @presentationTimeOffset", blurb: "Segment numbering no longer maps to the presentation timeline.", stage: "Packaging", requires: { protocol: "dash" } },
+  { key: "noFill", label: "Ad server returns nothing", blurb: "The break collapses to content, and nothing anywhere records it.", stage: "Decision", requires: { adMode: "ssai" } },
+  { key: "vpaidOnly", label: "VPAID-only response", blurb: "Code a stitcher has no engine to run; the avail cannot be filled.", stage: "Decision", requires: { adMode: "ssai" } },
+  { key: "slowChain", label: "Decision misses its budget", blurb: "A valid response that arrives after the splice point has passed.", stage: "Decision", requires: { adMode: "ssai" } },
+  { key: "creativeCodecMismatch", label: "Creative in the wrong codec", blurb: "Fills the avail, and resets the decoder at both ends of it.", stage: "Decision", requires: { adMode: "ssai" } },
+  { key: "podTooShort", label: "Pod shorter than the avail", blurb: "An early return to programme; measurable lost revenue.", stage: "Decision", requires: { adMode: "ssai" } },
+  { key: "podTooLong", label: "Pod longer than the avail", blurb: "The last ad is truncated, or programme content is cut.", stage: "Decision", requires: { adMode: "ssai" } },
   { key: "partHoldBackTooSmall", label: "Hold-back under the floor", blurb: "Clients sit closer to live than the packager can sustain.", stage: "Packaging", requires: { protocol: "hls" } },
   { key: "deltaUpdateDropsDateRanges", label: "Delta updates drop DATERANGE", blurb: "The break exists for some viewers and not others.", stage: "Packaging", requires: { protocol: "hls" } },
   { key: "noBlockingReload", label: "No blocking reload", blurb: "The latency the parts bought is spent polling.", stage: "Packaging", requires: { protocol: "hls" } },
@@ -68,6 +79,11 @@ const FAULTS: Fault[] = [
 ];
 
 /** Faults that only exist once partial segments are being published. */
+/** Faults that only exist once a real ad decision is being made. */
+const DECISION_FAULTS = new Set([
+  "noFill", "vpaidOnly", "slowChain", "creativeCodecMismatch", "podTooShort", "podTooLong",
+]);
+
 const LOW_LATENCY_FAULTS = new Set([
   "partHoldBackTooSmall",
   "deltaUpdateDropsDateRanges",
@@ -176,6 +192,7 @@ export default function SimulatorPage() {
   const [stitchMode, setStitchMode] = useState("fill");
   const [protocol, setProtocol] = useState<"hls" | "dash">("hls");
   const [lowLatency, setLowLatency] = useState(false);
+  const [adDecision, setAdDecision] = useState(false);
   const [adMode, setAdMode] = useState<"ssai" | "csai">("ssai");
   const [faults, setFaults] = useState<Record<string, boolean>>({});
   const [stage, setStage] = useState<Stage["id"]>("packager");
@@ -281,6 +298,17 @@ export default function SimulatorPage() {
               <option value="low">Low latency — partial segments</option>
             </select>
           </Field>
+          <Field label="Ad decision">
+            <select
+              className={SELECT}
+              value={adDecision ? "vast" : "pool"}
+              disabled={adMode === "csai"}
+              onChange={(e) => setAdDecision(e.target.value === "vast")}
+            >
+              <option value="pool">Assume creatives are available</option>
+              <option value="vast">Call a decision service for a VAST response</option>
+            </select>
+          </Field>
           <Field label="Ad insertion">
             <select className={SELECT} value={adMode} onChange={(e) => setAdMode(e.target.value as never)}>
               <option value="ssai">Server-side — the manifest is rewritten</option>
@@ -331,7 +359,8 @@ export default function SimulatorPage() {
               (f) =>
                 (!f.requires?.protocol || f.requires.protocol === protocol) &&
                 (!f.requires?.adMode || f.requires.adMode === adMode) &&
-                (!LOW_LATENCY_FAULTS.has(f.key) || lowLatency),
+                (!LOW_LATENCY_FAULTS.has(f.key) || lowLatency) &&
+                (!DECISION_FAULTS.has(f.key) || adDecision),
             ).map((f) => (
               <label key={f.key} className="flex cursor-pointer items-start gap-2.5 rounded-md p-1.5 hover:bg-raise">
                 <input
@@ -528,6 +557,41 @@ export default function SimulatorPage() {
             </div>
             )}
           </section>
+
+          {data.decisions && data.decisions.length > 0 && (
+            <section className="mt-4 rounded-lg border border-edge bg-panel p-5">
+              <h2 className="mb-1 text-sm font-medium text-foreground">What the ad decision returned</h2>
+              <p className="mb-3 text-xs text-muted">
+                The response, and what a stitcher could actually take from it. Anything rejected here
+                never reaches the manifest — and the manifest has no way to say why.
+              </p>
+              {data.decisions.slice(0, 2).map((d) => (
+                <div key={d.availId} className="mb-3 last:mb-0">
+                  <div className="flex flex-wrap items-baseline gap-x-3 text-xs">
+                    <span className="text-foreground">avail {d.availId}</span>
+                    <span className="text-muted">{d.availSeconds}s</span>
+                    <span className={d.elapsedMs > d.budgetMs ? "text-danger" : "text-muted"}>
+                      {d.elapsedMs}ms of {d.budgetMs}ms budget
+                    </span>
+                    <span className={d.accepted.length ? "text-ok" : "text-danger"}>
+                      {d.accepted.length} accepted
+                    </span>
+                    {d.rejected.length > 0 && <span className="text-warn">{d.rejected.length} rejected</span>}
+                  </div>
+                  {d.rejected.length > 0 && (
+                    <ul className="mt-1.5 flex flex-col gap-1">
+                      {d.rejected.slice(0, 3).map((r, i) => (
+                        <li key={i} className="text-xs leading-relaxed text-soft">
+                          <span className="font-mono text-[10px] uppercase tracking-wider text-muted">{r.code}</span>{" "}
+                          {r.creative.advertiser} — {r.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
 
           {data.csai && (
             <section className="mt-4 rounded-lg border border-edge bg-panel p-5">

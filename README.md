@@ -29,8 +29,9 @@ Five tools, a CLI, and a report you can send someone:
 - **Ad response** (`/vast`) — a VAST or VMAP document checked against what
   server-side insertion can actually splice, and against the ladder of a stream
   you name
-- **Simulator** (`/simulator`) — builds a stream through the whole chain, so the
-  rules can be tested against faults whose ground truth is known
+- **Simulator** (`/simulator`) — builds a stream through the whole chain,
+  including the ad decision, so a fault in the ad response can be watched
+  surfacing as something else entirely in the manifest
 - **Reports** — any result copies or downloads as Markdown for a ticket, or as
   JSON for a pipeline
 - **CLI** — the same analysis in a terminal or a build pipeline
@@ -475,7 +476,7 @@ clean run stays silent.
 ## Testing
 
 ```bash
-npm test      # 190 tests across 11 files
+npm test      # 197 tests across 11 files
 ```
 
 - **Spec vectors** — the SCTE-35 decoder is asserted against published ANSI/SCTE

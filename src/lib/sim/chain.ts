@@ -16,6 +16,7 @@ import { stitch, type SsaiSpec, type StitchMode, type StitchResult } from "./ssa
 import { buildTimeline, type ChannelSpec, type SignalStyle, type Timeline, type TimelineFaults } from "./timeline";
 import { writeMpd, type DashSpec } from "./dashPackager";
 import { runCsai, type CsaiResult, type CsaiSpec } from "./csai";
+import { describeDecision, requestAds, type AdDecision, type DecisionFaults } from "./decision";
 
 export interface SimConfig {
   segmentSeconds: number;
@@ -31,6 +32,8 @@ export interface SimConfig {
   protocol: "hls" | "dash";
   /** Publish partial segments, and declare the contract that goes with them. */
   lowLatency: boolean;
+  /** Run a real ad decision before the stitch, rather than a fixed pool. */
+  adDecision?: boolean;
   /** Where the ad is spliced: in the manifest, or in the player. */
   adMode: "ssai" | "csai";
   dash?: Partial<DashSpec>;
@@ -59,6 +62,13 @@ export interface SimConfig {
       deltaUpdateDropsDateRanges?: boolean;
       /** LL: publish parts but make clients poll for them. */
       noBlockingReload?: boolean;
+      /** The ad decision itself: what the service returns, and how fast. */
+      noFill?: boolean;
+      vpaidOnly?: boolean;
+      creativeCodecMismatch?: boolean;
+      slowChain?: boolean;
+      podTooLong?: boolean;
+      podTooShort?: boolean;
     };
 }
 
@@ -83,7 +93,7 @@ export const DEFAULT_CONFIG: SimConfig = {
 export const EPOCH = Date.UTC(2026, 0, 1, 0, 0, 0);
 
 export interface Stage {
-  id: "encoder" | "packager" | "origin" | "ssai";
+  id: "encoder" | "packager" | "origin" | "decision" | "ssai";
   title: string;
   /** One line on what this stage did to the stream. */
   note: string;
@@ -99,6 +109,8 @@ export interface SimResult {
   master: string;
   origin: { text: string; uri: string; from: number; count: number; behindSec: number };
   ssai: StitchResult;
+  /** One per avail in the session window. */
+  decisions: AdDecision[];
   csai?: CsaiResult;
   /** Set when the packager emitted DASH. */
   mpd?: { text: string; uri: string };
@@ -194,8 +206,40 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
   const from = Math.max(0, firstAvailIdx - 3);
   const count = Math.min(config.windowSegments, timeline.segments.length - from);
 
+  // The ad decision runs before the stitch, because that is the order it
+  // happens in and because the stitcher can only use what came back.
+  const decisionFaults: DecisionFaults = {
+    noFill: f.noFill,
+    vpaidOnly: f.vpaidOnly,
+    codecMismatch: f.creativeCodecMismatch,
+    slowChain: f.slowChain,
+    podTooLong: f.podTooLong,
+    podTooShort: f.podTooShort,
+  };
+  const decisionRequested = Object.values(decisionFaults).some(Boolean) || config.adDecision === true;
+  const decisions: AdDecision[] = decisionRequested
+    ? timeline.avails.map((a) =>
+        requestAds(a.id, a.snappedDurationSec, {
+          contentCodec: "avc1.640028",
+          contentPeakKbps: 5000,
+          budgetMs: config.lowLatency ? 1000 : 4000,
+          faults: decisionFaults,
+        }),
+      )
+    : [];
+
+  const decided = decisionRequested
+    ? new Map(
+        decisions.map((d) => [
+          d.availId,
+          d.accepted.map((c) => ({ id: c.id, advertiser: c.advertiser, durationSec: c.durationSec })),
+        ]),
+      )
+    : undefined;
+
   const ssaiSpec: SsaiSpec = {
     mode: config.stitchMode,
+    decided,
     dropDiscontinuity: f.dropDiscontinuity,
     visibleAvailIds: timeline.avails
       .filter((a) => a.id !== f.untranscribedAvail)
@@ -303,6 +347,17 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
       text: sourceMpd ? sourceMpd.text : origin.text,
       uri: sourceMpd ? sourceMpd.uri : origin.uri,
     },
+    ...(decisionRequested && config.adMode === "ssai"
+      ? [
+          {
+            id: "decision" as const,
+            title: "Ad decision",
+            note: describeDecision(decisions[0]),
+            text: decisions[0]?.vast,
+            uri: "VAST response",
+          },
+        ]
+      : []),
     config.adMode === "csai"
       ? {
           id: "ssai",
@@ -325,6 +380,7 @@ export function runChain(config: SimConfig = DEFAULT_CONFIG): SimResult {
   return {
     config,
     timeline,
+    decisions,
     csai,
     mpd: mpd ? { text: mpd.text, uri: mpd.uri } : undefined,
     stages,
