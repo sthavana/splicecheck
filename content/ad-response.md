@@ -179,8 +179,10 @@ returns it.
 
 ### The creative has to fit a ladder that already exists
 
-The ad is going to be spliced into an existing presentation with an existing ABR
-ladder. Two mismatches matter:
+The ad is going to be spliced into an existing presentation with an existing
+**ABR ladder** — adaptive bitrate: the set of renditions the same content is
+encoded at, so a player can move between them as bandwidth changes. Two
+mismatches matter:
 
 - **Codec.** An HEVC ad in an H.264 stream forces a decoder tear-down at both
   ends of the break. That is the black frame or audio drop that gets reported as
