@@ -81,9 +81,9 @@ const NAV_GROUPS: { title: string; note: string; items: [string, string][] }[] =
     note: "How the chain works",
     items: [
       ["/guide", "Ad insertion"],
-      ["/faq", "Video vs ad tech"],
       ["/ad-response", "The ad response"],
       ["/streaming", "Delivery chain"],
+      ["/faq", "Video vs ad tech"],
       ["/notes/fifty-five-alerts", "Fifty-five alerts"],
     ],
   },
