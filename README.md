@@ -13,6 +13,7 @@ purpose, to see what the rules catch.
 **Live demo: [splicecheck.vercel.app](https://splicecheck.vercel.app)** ·
 **Reference: [how ad insertion works](https://splicecheck.vercel.app/guide)** ·
 **Write-up: [fifty-five alerts and nothing wrong](https://splicecheck.vercel.app/notes/fifty-five-alerts)** ·
+**Reference: [where video and ad tech talk past each other](https://splicecheck.vercel.app/faq)** ·
 **Reference: [the ad response](https://splicecheck.vercel.app/ad-response)** ·
 **Reference: [how a stream gets to a viewer](https://splicecheck.vercel.app/streaming)**
 

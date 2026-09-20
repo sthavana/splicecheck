@@ -508,6 +508,7 @@ img { max-width: 100%; }
 
 
 
+
     <div class="site-nav-group">
       <h2>Tool</h2>
       <p class="site-nav-note">Point it at a live stream</p>
@@ -530,6 +531,7 @@ img { max-width: 100%; }
       <p class="site-nav-note">How the chain works</p>
       <ul>
         <li><a href="/guide" aria-current="page">Ad insertion</a></li>
+        <li><a href="/faq">Video vs ad tech</a></li>
         <li><a href="/ad-response">The ad response</a></li>
         <li><a href="/streaming">Delivery chain</a></li>
         <li><a href="/notes/fifty-five-alerts">Fifty-five alerts</a></li>
@@ -1433,6 +1435,14 @@ descriptors         1 × avail_descriptor (CUEI)
   insertion can actually splice, measures the pod against the avail the SCTE-35 asked for, compares
   the creative's encode with the ladder of a stream you name, and will optionally follow the wrapper
   chain to report how many hops it takes and how long they cost.</p>
+
+  <div class="note">
+    <span class="tag">If you came from the other side</span>
+    <p><a href="/faq">Where video and ad tech talk past each other</a> collects the recurring
+    misunderstandings between the two — fill rate meaning two different things, why an empty ad
+    response is technically a success, and why every fault in the ad stack surfaces as an unfilled
+    avail that looks like a signalling problem.</p>
+  </div>
 
   <div class="note">
     <span class="tag">In more depth</span>

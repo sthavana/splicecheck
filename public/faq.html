@@ -1,0 +1,292 @@
+<!doctype html>
+  <html lang="en">
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Where video and ad tech talk past each other</title>
+  <meta name="description" content="The recurring misunderstandings between video engineering and ad technology: fill rate meaning two things, why VPAID cannot be stitched, why an empty ad response is technically a success, and why every fault looks like an unfilled avail.">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-icon.png">
+  <meta property="og:title" content="Where video and ad tech talk past each other">
+  <meta property="og:description" content="The recurring misunderstandings between video engineering and ad technology: fill rate meaning two things, why VPAID cannot be stitched, why an empty ad response is technically a success, and why every fault looks like an unfilled avail.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://splicecheck.vercel.app/faq">
+  <meta property="og:image" content="https://splicecheck.vercel.app/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://splicecheck.vercel.app/og.png">
+  <link rel="stylesheet" href="/reading.css">
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+  </head>
+  <body>
+
+  <div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+  <div class="site-shell">
+    <nav class="site-nav" aria-label="Site">
+      <a class="site-nav-brand" href="/">Splice<span>Check</span></a>
+
+      <div class="site-nav-group">
+      <h2>Tool</h2>
+      <p class="site-nav-note">Point it at a live stream</p>
+      <ul>
+        <li><a href="/">Inspector</a></li>
+        <li><a href="/compare">Pipeline comparison</a></li>
+        <li><a href="/monitors">Monitors</a></li>
+        <li><a href="/vast">Ad response</a></li>
+      </ul>
+    </div>
+
+    <div class="site-nav-group">
+      <h2>Simulator</h2>
+      <p class="site-nav-note">Build a stream, then break it</p>
+      <ul>
+        <li><a href="/simulator">Chain simulator</a></li>
+      </ul>
+    </div>
+
+    <div class="site-nav-group">
+      <h2>Reading</h2>
+      <p class="site-nav-note">How the chain works</p>
+      <ul>
+        <li><a href="/guide">Ad insertion</a></li>
+        <li><a href="/faq" aria-current="page">Video vs ad tech</a></li>
+        <li><a href="/ad-response">The ad response</a></li>
+        <li><a href="/streaming">Delivery chain</a></li>
+        <li><a href="/notes/fifty-five-alerts">Fifty-five alerts</a></li>
+      </ul>
+    </div>
+
+      <div class="site-nav-toc">
+        <h2>On this page</h2>
+        <ol>
+          <li><a href="#1-words-that-mean-two-things">Words that mean two things</a></li>
+        <li><a href="#2-what-the-cue-does-and-does-not-say">What the cue does and does not say</a></li>
+        <li><a href="#3-what-a-stitcher-cannot-do">What a stitcher cannot do</a></li>
+        <li><a href="#4-measurement-means-different-things-too">Measurement means different things too</a></li>
+        <li><a href="#5-why-nobody-notices">Why nobody notices</a></li>
+        <li><a href="#6-a-short-glossary-for-whichever-side-you-came-from">A short glossary for whichever side you came from</a></li>
+        </ol>
+      </div>
+
+      <div class="site-nav-foot">
+        <a href="https://github.com/sthavana/splicecheck">Source</a>
+      </div>
+    </nav>
+
+    <div class="site-main">
+      <div class="shell wide">
+
+        <header class="masthead">
+          <p class="eyebrow">Ad insertion · common ground</p>
+          <h1>Where video and ad tech talk past each other</h1>
+          <p class="standfirst">Two groups of competent people, both usually right about their own half. These are the disagreements that come up again and again — because a word means two things, or because a fault in one half only becomes visible in the other.</p>
+        </header>
+
+        <main>
+  <p>Ad insertion is built by two groups of people who rarely share a standup. One
+owns encoders, packagers, origins and CDNs. The other owns decision services,
+creatives, campaigns and reporting. Both are competent. Both are usually right
+about their own half.</p>
+<p>What follows are the disagreements that come up again and again — not because
+anybody is wrong, but because the same word means two different things, or
+because a fault in one half only becomes visible in the other.</p>
+<section id="1-words-that-mean-two-things"><h2><span class="sec-num">01</span>Words that mean two things</h2>
+<h3>&quot;Fill rate&quot; — 100% and 60% at the same time</h3>
+<p><strong>Ad tech</strong> means the proportion of ad requests that came back with an ad. If
+the decision service answered every request, fill rate is 100%.</p>
+<p><strong>Video</strong> means the proportion of avail seconds actually occupied by ad
+content. If a 90-second break got 60 seconds of creative, fill rate is 67%.</p>
+<p>Both numbers can be correct simultaneously, and they usually are. A decision
+service that returns two thirties for a ninety-second break has filled every
+request it received and left a third of the inventory empty.</p>
+<p>When the two teams compare numbers in a meeting and they do not match, this is
+the reason about half the time. The fix is not a better number; it is naming
+which one you mean.</p>
+<h3>&quot;Latency&quot; — glass to glass, or the ad server&#39;s response time</h3>
+<p><strong>Video</strong> means the distance between something happening and a viewer seeing
+it. Two seconds is low. Thirty is normal for HLS at default settings.</p>
+<p><strong>Ad tech</strong> means how long the decision service took to answer. Two hundred
+milliseconds is good. Eight hundred is tolerable.</p>
+<p>These are not the same scale and they are not the same problem, but they meet
+at one point: the ad decision has to complete inside the distance the viewer is
+sitting behind live. At thirty seconds of latency, an 800ms decision is
+invisible. At two seconds, it is nearly half the budget.</p>
+<h3>&quot;The ad didn&#39;t play&quot;</h3>
+<p><strong>Video</strong> checks the manifest: the break is there, the markers are correct, the
+segments exist. Nothing is wrong.</p>
+<p><strong>Ad tech</strong> checks the ad server: the request arrived, a creative was selected,
+the impression fired. Nothing is wrong.</p>
+<p>The viewer saw slate.</p>
+<p>Both teams are looking at true information about their own half. The fault
+lives in the handoff — and neither system has a view of the handoff. This is
+the single most common shape of an ad-insertion incident.</p>
+<hr>
+</section><section id="2-what-the-cue-does-and-does-not-say"><h2><span class="sec-num">02</span>What the cue does and does not say</h2>
+<h3>SCTE-35 does not say what ad to play</h3>
+<p>It says an opportunity exists, when it starts, and how long it runs. That is
+all. It carries no creative, no campaign, no targeting.</p>
+<p>The confusion comes from the UPID, which looks like an identifier for the ad
+and is not. A UPID identifies the <em>opportunity</em> — this break, in this
+programme, on this channel — so a decision service can apply rules to it. What
+plays is decided afterwards, by something else, against that key.</p>
+<h3>The break length is a constraint, not a request</h3>
+<p>A decision service asked for ninety seconds can return sixty, and from its side
+that is a reasonable outcome: it had two ads. From the video side, the hole is
+ninety seconds wide regardless. Something must occupy the other thirty —
+slate, black, or an early return.</p>
+<p>The avail duration came from playout automation. It is not negotiable at
+decision time, and returning less is not a smaller break, it is an emptier one.</p>
+<h3>An empty response is a success, technically</h3>
+<p>If the decision service has nothing to serve, it answers with an empty
+document. That is correct behaviour and correctly handled: the break collapses,
+content resumes, no error anywhere.</p>
+<p>It is also unsold inventory, and it is invisible. The manifest is valid, the
+player is happy, the ad server logged a no-fill and moved on. Nothing pages
+anybody. The only way to know is to count avails signalled against avails
+filled — which requires looking at both halves at once.</p>
+<hr>
+</section><section id="3-what-a-stitcher-cannot-do"><h2><span class="sec-num">03</span>What a stitcher cannot do</h2>
+<h3>VPAID is not &quot;hard to stitch&quot;. It is impossible.</h3>
+<p>VPAID creatives are JavaScript. The ad is a program the player runs, which is
+how interactive and expandable formats work.</p>
+<p>Server-side insertion has no browser, no DOM and no JavaScript engine. It is
+selecting media ahead of time on behalf of viewers it cannot see. A VPAID-only
+response cannot be filled by a stitcher under any circumstances — and from the
+manifest, that avail looks exactly like a signalling fault.</p>
+<p>This surprises people because VPAID works fine in client-side insertion, which
+was the only kind when VPAID was designed.</p>
+<h3>&quot;Can&#39;t you just transcode the ad?&quot;</h3>
+<p>Yes, and it is normally done — that is what ad conditioning is. But it happens
+<em>in advance</em>, in a separate pipeline, so that a creative is eligible before
+anyone asks for it.</p>
+<p>Doing it at decision time means transcoding a thirty-second file inside a
+budget measured in hundreds of milliseconds. It does not fit. A creative that
+was not conditioned is not a slow ad, it is an absent one.</p>
+<h3>The ad has to fit a ladder that already exists</h3>
+<p>The stream is encoded at several renditions, and the ad is being spliced into
+them. A creative in a different codec forces a decoder reset at both ends of
+the break — the black frame that gets reported as &quot;the ad broke the stream&quot;.
+One encoded at 9 Mbps, spliced into a ladder topping out at 1.3, is heavier
+than anything that viewer has sustained, and the rebuffer lands mid-ad.</p>
+<p>Neither is the packager&#39;s doing, and both are usually reported to the packaging
+team.</p>
+<hr>
+</section><section id="4-measurement-means-different-things-too"><h2><span class="sec-num">04</span>Measurement means different things too</h2>
+<h3>An impression is not a view, and a segment request is not an impression</h3>
+<p><strong>Client-side</strong> insertion fires beacons from the device. They reflect what
+actually happened — including that the player was muted, backgrounded, or
+scrolled off screen. Accurate, and reachable by an ad blocker.</p>
+<p><strong>Server-side</strong> insertion fires them from the stitcher, inferring playback from
+segment requests. Robust against blocking, because nothing is asked of the
+device. But a segment request is not a view: the player may have fetched it and
+never rendered it.</p>
+<p>Neither is wrong. They measure different things. Comparing a client-side
+campaign&#39;s numbers with a server-side one&#39;s is comparing two definitions of
+&quot;played&quot;, and the difference is not a discrepancy to be reconciled.</p>
+<h3>Why server-side numbers look &quot;too good&quot;</h3>
+<p>Because blocking is not subtracting from them. That is the trade the
+architecture makes, and it is the reason to expect the two to differ rather
+than a reason to distrust either.</p>
+<hr>
+</section><section id="5-why-nobody-notices"><h2><span class="sec-num">05</span>Why nobody notices</h2>
+<h3>Everything fails as an unfilled avail</h3>
+<p>A VPAID-only response, a creative in the wrong codec, a decision that missed
+its deadline, a wrapper chain four redirects deep, an ad server that timed out
+— all of them produce the same downstream symptom. The break did not fill.</p>
+<p>In a manifest, that looks like a signalling problem. So it gets raised with the
+packaging team, who spend a day proving the SCTE-35 was correct, which it was.</p>
+<h3>The stream stays valid throughout</h3>
+<p>This is the part that is genuinely counter-intuitive from the video side. There
+is no malformed manifest, no HTTP error, no decode failure. Every component
+reports success. The signalling is correct, the packaging is correct, the
+delivery is correct, and the revenue is missing.</p>
+<p>Monitoring built around stream health will not catch it, because the stream is
+healthy.</p>
+<h3>The symptom appears a layer away from the cause</h3>
+<p>Which is why answering &quot;whose fault is it&quot; requires a view of more than one
+layer at once — the signal that asked for the break, the response that was
+meant to fill it, and the manifest that shows what actually happened.</p>
+<div class="xref"><span class="tag">In SpliceCheck</span><p>this is the argument the whole project is built on. The
+<a href="/compare">pipeline comparison</a> puts the feed going into an ad service beside
+the output coming out, so a break that was signalled and not filled is visible
+as neither side being wrong. The <a href="/vast">ad response</a> tool checks the VAST
+against what a stitcher can actually splice. The
+<a href="/simulator">simulator</a> lets you inject a fault in one layer and watch what a
+different layer reports instead.</p></div>
+<hr>
+</section><section id="6-a-short-glossary-for-whichever-side-you-came-from"><h2><span class="sec-num">06</span>A short glossary for whichever side you came from</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Video means</th>
+<th>Ad tech means</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Avail</td>
+<td>A slot in the timeline, bracketed by cues</td>
+<td>An inventory unit that can be sold</td>
+</tr>
+<tr>
+<td>Break</td>
+<td>The same slot, as delivered</td>
+<td>A scheduled interruption</td>
+</tr>
+<tr>
+<td>Pod</td>
+<td>—</td>
+<td>The group of ads inside one break</td>
+</tr>
+<tr>
+<td>Spot</td>
+<td>—</td>
+<td>One commercial, usually 15, 30 or 60 seconds</td>
+</tr>
+<tr>
+<td>Fill</td>
+<td>Ad content occupying avail seconds</td>
+<td>A request that returned an ad</td>
+</tr>
+<tr>
+<td>Slate</td>
+<td>A holding card or black, shown when nothing else is</td>
+<td>Unsold inventory, eventually</td>
+</tr>
+<tr>
+<td>Cue</td>
+<td>SCTE-35 in the stream or a manifest tag</td>
+<td>The trigger to call the ad server</td>
+</tr>
+<tr>
+<td>Conditioning</td>
+<td>Transcoding an ad to match the content ladder</td>
+<td>Making a creative eligible</td>
+</tr>
+<tr>
+<td>Stitching</td>
+<td>Rewriting a manifest to substitute segments</td>
+<td>Server-side insertion generally</td>
+</tr>
+<tr>
+<td>Beacon</td>
+<td>An HTTP request the stitcher makes</td>
+<td>A tracking event that proves delivery</td>
+</tr>
+<tr>
+<td>Latency</td>
+<td>Glass to glass</td>
+<td>Decision response time</td>
+</tr>
+</tbody></table></div>
+</section>
+        </main>
+      </div>
+    </div>
+  </div>
+  </body>
+  </html>
+  

@@ -39,6 +39,7 @@ const GROUPS: Group[] = [
     // Static pages, so these are plain anchors rather than router links.
     items: [
       { href: "/guide", label: "Ad insertion", external: true },
+      { href: "/faq", label: "Video vs ad tech", external: true },
       { href: "/ad-response", label: "The ad response", external: true },
       { href: "/streaming", label: "Delivery chain", external: true },
       { href: "/notes/fifty-five-alerts", label: "Fifty-five alerts", external: true },

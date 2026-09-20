@@ -37,6 +37,17 @@ const PAGES: PageSpec[] = [
       "How video actually reaches a player: the ABR ladder, packaging, HLS, DASH, low latency, origin and CDN — and what goes wrong at each handoff.",
   },
   {
+    source: "content/faq.md",
+    out: "public/faq.html",
+    url: "/faq",
+    title: "Where video and ad tech talk past each other",
+    eyebrow: "Ad insertion · common ground",
+    standfirst:
+      "Two groups of competent people, both usually right about their own half. These are the disagreements that come up again and again — because a word means two things, or because a fault in one half only becomes visible in the other.",
+    description:
+      "The recurring misunderstandings between video engineering and ad technology: fill rate meaning two things, why VPAID cannot be stitched, why an empty ad response is technically a success, and why every fault looks like an unfilled avail.",
+  },
+  {
     source: "content/ad-response.md",
     out: "public/ad-response.html",
     url: "/ad-response",
@@ -70,6 +81,7 @@ const NAV_GROUPS: { title: string; note: string; items: [string, string][] }[] =
     note: "How the chain works",
     items: [
       ["/guide", "Ad insertion"],
+      ["/faq", "Video vs ad tech"],
       ["/ad-response", "The ad response"],
       ["/streaming", "Delivery chain"],
       ["/notes/fifty-five-alerts", "Fifty-five alerts"],
