@@ -35,24 +35,63 @@ sentence on its own.
 
 ## 1. The chain, end to end
 
-```
-  camera / file            encoder            packager           origin
-  ┌──────────┐      ┌──────────────┐    ┌──────────────┐   ┌──────────┐
-  │ mezzanine│─────▶│ transcode to │───▶│ segment +    │──▶│ serve    │
-  │  SDI/RTP │      │ a ladder of  │    │ write        │   │ manifest │
-  │  / mp4   │      │ renditions   │    │ manifests    │   │ + media  │
-  └──────────┘      └──────────────┘    └──────────────┘   └────┬─────┘
-                       H.264/HEVC/AV1     TS or CMAF             │
-                       AAC/AC-3           HLS and/or DASH        │
-                                                                 ▼
-                                                        ┌─────────────┐
-   ┌────────┐         ┌──────────────┐                  │ origin      │
-   │ player │◀────────│  CDN edge    │◀─────────────────│ shield      │
-   └────────┘         └──────────────┘                  └─────────────┘
-    picks a rung       caches segments long,
-    per segment        manifests briefly
-```
-
+<figure>
+<svg viewBox="0 0 940 320" role="img" aria-label="The delivery chain: a mezzanine source feeds an encoder, which produces a ladder of renditions; a packager segments them and writes manifests; an origin serves those, fronted by an origin shield and a CDN edge that caches segments for a long time and manifests briefly; the player picks a rung per segment.">
+  <defs>
+    <marker id="dc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+    <marker id="dc-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+  <!-- production path -->
+  <rect x="24" y="46" width="150" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="99" y="72" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Camera / file</text>
+  <text x="99" y="90" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7" text-anchor="middle">SDI, RTP, mp4</text>
+  <rect x="250" y="46" width="180" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="340" y="72" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Encoder</text>
+  <text x="340" y="90" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7" text-anchor="middle">one ladder of renditions</text>
+  <rect x="506" y="46" width="180" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="596" y="72" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Packager</text>
+  <text x="596" y="90" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7" text-anchor="middle">segments + manifests</text>
+  <rect x="762" y="46" width="150" height="62" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+  <text x="837" y="72" font-family="Archivo, sans-serif" font-size="13" fill="var(--accent)" text-anchor="middle">Origin</text>
+  <text x="837" y="90" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--accent)" text-anchor="middle">the only source</text>
+  <g stroke="currentColor" stroke-width="1.25" fill="none" marker-end="url(#dc-arrow)">
+    <line x1="174" y1="77" x2="245" y2="77"/>
+    <line x1="430" y1="77" x2="501" y2="77"/>
+    <line x1="686" y1="77" x2="757" y2="77"/>
+  </g>
+  <text x="209" y="68" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72" text-anchor="middle">mezzanine</text>
+  <text x="340" y="130" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72" text-anchor="middle">H.264 / HEVC / AV1</text>
+  <text x="340" y="146" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72" text-anchor="middle">AAC / AC-3</text>
+  <text x="596" y="130" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72" text-anchor="middle">TS or CMAF</text>
+  <text x="596" y="146" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72" text-anchor="middle">HLS and/or DASH</text>
+  <!-- down into distribution -->
+  <line x1="837" y1="108" x2="837" y2="205" stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#dc-arrow-accent)"/>
+  <!-- distribution path, right to left -->
+  <rect x="762" y="210" width="150" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="837" y="236" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Origin shield</text>
+  <text x="837" y="254" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7" text-anchor="middle">one cache layer in</text>
+  <rect x="430" y="210" width="180" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="520" y="236" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">CDN edge</text>
+  <text x="520" y="254" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7" text-anchor="middle">nearest to the viewer</text>
+  <rect x="100" y="210" width="150" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="175" y="236" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">Player</text>
+  <text x="175" y="254" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7" text-anchor="middle">picks a rung per segment</text>
+  <g stroke="currentColor" stroke-width="1.25" fill="none" marker-end="url(#dc-arrow)">
+    <line x1="762" y1="241" x2="615" y2="241"/>
+    <line x1="430" y1="241" x2="255" y2="241"/>
+  </g>
+  <text x="688" y="232" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72" text-anchor="middle">cache miss only</text>
+  <text x="342" y="232" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72" text-anchor="middle">segments: long TTL</text>
+  <text x="342" y="298" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72" text-anchor="middle">manifests: seconds</text>
+</svg>
+<figcaption>Four systems and four handoffs. Everything to the right of the origin is a
+copy; the origin is the only thing that knows what the stream actually is, which is why a
+cache serving a stale manifest looks exactly like an origin that has stopped.</figcaption>
+</figure>
 Four handoffs, four places to lie. The player only ever sees the last one, so
 from a player's vantage a dead encoder, a stuck packager, a failed origin and a
 stale CDN edge all look the same: a manifest that stops changing.
@@ -188,14 +227,31 @@ That convergence is what CMAF is for. Before it, serving both protocols meant
 packaging everything twice and storing it twice. With CMAF you write one set of
 segments and two manifests over them:
 
-```
-        /video_1080p/init.mp4
-        /video_1080p/1.m4s, 2.m4s, 3.m4s …
-             ▲                        ▲
-             │                        │
-      master.m3u8              manifest.mpd
-      (HLS view)               (DASH view)
-```
+<figure>
+<svg viewBox="0 0 700 220" role="img" aria-label="One set of CMAF segments on disk, with an HLS master playlist and a DASH MPD both pointing at the same files: two views over one set of media.">
+  <defs>
+    <marker id="mv-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="150" y="18" width="400" height="66" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+  <text x="350" y="42" font-family="JetBrains Mono, monospace" font-size="11" fill="var(--accent)" text-anchor="middle">/video_1080p/init.mp4</text>
+  <text x="350" y="62" font-family="JetBrains Mono, monospace" font-size="11" fill="var(--accent)" text-anchor="middle">/video_1080p/1.m4s, 2.m4s, 3.m4s …</text>
+  <text x="350" y="78" font-family="Archivo, sans-serif" font-size="10.5" fill="var(--accent)" text-anchor="middle" opacity="0.85">one set of CMAF segments, written once</text>
+  <g stroke="currentColor" stroke-width="1.25" fill="none" marker-end="url(#mv-arrow)">
+    <line x1="230" y1="150" x2="230" y2="89"/>
+    <line x1="470" y1="150" x2="470" y2="89"/>
+  </g>
+  <rect x="140" y="152" width="180" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="230" y="176" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">master.m3u8</text>
+  <text x="230" y="194" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7" text-anchor="middle">the HLS view</text>
+  <rect x="380" y="152" width="180" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+  <text x="470" y="176" font-family="Archivo, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">manifest.mpd</text>
+  <text x="470" y="194" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7" text-anchor="middle">the DASH view</text>
+</svg>
+<figcaption>Two manifests describing the same bytes. CMAF is what makes this possible: the
+segments are packaged once, and each manifest is only a different way of addressing them.</figcaption>
+</figure>
 
 An **initialisation segment** is required to decode anything: it carries the SPS
 and PPS for H.264, the decoder configuration, the timescale. Fetch a media
@@ -527,10 +583,38 @@ fetch part of a segment before the segment is finished**.
 
 ### Where the latency actually is
 
-```
-encoder    packager    origin    CDN     player buffer
- 1-2s        0.5s       0.1s     0.2s     3 × segment duration   ← the big one
-```
+<figure>
+<svg viewBox="0 0 700 190" role="img" aria-label="Where end-to-end latency comes from, drawn to scale: encoder 1.5 seconds, packager 0.5, origin 0.1, CDN 0.2, and the player buffer 12 seconds at three times a four-second segment — which is larger than everything else combined.">
+  <text x="0" y="16" font-family="JetBrains Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">seconds</text>
+  <g font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.55">
+    <text x="0" y="150" text-anchor="start">0</text>
+    <text x="163" y="150" text-anchor="middle">4</text>
+    <text x="326" y="150" text-anchor="middle">8</text>
+    <text x="489" y="150" text-anchor="middle">12</text>
+    <text x="652" y="150" text-anchor="middle">16</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1" opacity="0.18">
+    <line x1="163" y1="30" x2="163" y2="140"/>
+    <line x1="326" y1="30" x2="326" y2="140"/>
+    <line x1="489" y1="30" x2="489" y2="140"/>
+    <line x1="652" y1="30" x2="652" y2="140"/>
+  </g>
+  <!-- 40.75px per second, so the bar is drawn to the scale below it -->
+  <rect x="0" y="46" width="61" height="34" fill="currentColor" opacity="0.28" stroke="currentColor" stroke-width="1"/>
+  <rect x="61" y="46" width="20" height="34" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1"/>
+  <rect x="81" y="46" width="4" height="34" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="1"/>
+  <rect x="85" y="46" width="8" height="34" fill="currentColor" opacity="0.14" stroke="currentColor" stroke-width="1"/>
+  <rect x="93" y="46" width="489" height="34" fill="var(--accent)" opacity="0.22" stroke="var(--accent)" stroke-width="1.5"/>
+  <line x1="93" y1="82" x2="93" y2="104" stroke="currentColor" stroke-width="1" opacity="0.4"/>
+  <text x="0" y="118" font-family="JetBrains Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.72">encoder 1.5s &#183; packager 0.5s &#183; origin 0.1s &#183; CDN 0.2s</text>
+  <text x="337" y="68" font-family="Archivo, sans-serif" font-size="13" fill="var(--accent)" text-anchor="middle">player buffer — 3 × segment duration</text>
+  <text x="337" y="100" font-family="JetBrains Mono, monospace" font-size="9.5" fill="var(--accent)" text-anchor="middle">12s, with 4-second segments</text>
+  <text x="0" y="176" font-family="Archivo, sans-serif" font-size="12" fill="currentColor" opacity="0.85">Everything before the player adds up to 2.3s. The buffer is 12.</text>
+</svg>
+<figcaption>Drawn to scale, because the proportion is the argument. Shortening segments
+shrinks the only part that matters — which is why low latency is a packaging problem
+rather than an encoding one.</figcaption>
+</figure>
 
 The player buffer dominates, and it is a function of segment duration. You
 cannot fix it by making segments shorter forever — at some point the request
