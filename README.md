@@ -18,13 +18,16 @@ purpose, to see what the rules catch.
 The interface follows the viewer's colour theme, and can be set to light or dark
 explicitly.
 
-Four tools, a CLI, and a report you can send someone:
+Five tools, a CLI, and a report you can send someone:
 
 - **Inspector** (`/`) — a one-off look at any stream
 - **Pipeline comparison** (`/compare`) — the feed going *into* an ad-insertion
   service against the stitched output coming *out* of it, to see which avails
   were actually filled
 - **Monitor** (`/monitors`) — polls on an interval and alerts on transitions
+- **Ad response** (`/vast`) — a VAST or VMAP document checked against what
+  server-side insertion can actually splice, and against the ladder of a stream
+  you name
 - **Simulator** (`/simulator`) — builds a stream through the whole chain, so the
   rules can be tested against faults whose ground truth is known
 - **Reports** — any result copies or downloads as Markdown for a ticket, or as
@@ -313,6 +316,24 @@ The last four require making the request a player would make, which is opt-in
 for the same reason reading segments is. Everything else in this project can be
 judged from a manifest's text; this cannot.
 
+**VAST and VMAP** — the ad response, and whether the creative in it can
+actually be stitched. SCTE-35 says an avail exists; this is what goes in it.
+
+| Code | What it catches |
+| --- | --- |
+| `VAST_EXECUTABLE_CREATIVE` | VPAID is JavaScript and a stitcher has no engine to run it — an all-VPAID response is unfillable by construction |
+| `VAST_CODEC_MISMATCH` / `VAST_BITRATE_ABOVE_LADDER` | The creative is encoded unlike the programme, or above the top rung the viewer has ever sustained |
+| `VAST_POD_OVERRUNS_AVAIL` / `_UNDERFILLS_AVAIL` | The pod does not fit the break the SCTE-35 asked for — a truncated last ad, or slate at the tail |
+| `VAST_NO_IMPRESSION` / `VAST_NO_ERROR_URL` | Nothing to bill against, or no way for the ad server to learn its creative failed |
+| `VAST_INCOMPLETE_TRACKING` | Without the quartile set, an ad that ran to the end reports the same as one that failed halfway |
+| `VAST_WRAPPER_TOO_DEEP` / `_LOOP` / `_UNRESOLVED` | Redirect chains that exceed the guidance, point back at themselves, or stop dead |
+| `VAST_CHAIN_SLOW` | Serial round trips measured against the decision budget — the low-latency rules and these talking to each other |
+| `VAST_NO_FILL` | Not malformed: unsold inventory, indistinguishable from a filled break unless someone counts |
+| `VMAP_NO_AD_SOURCE` / `VMAP_DUPLICATE_OFFSET` | A scheduled break with nothing to put in it, or two breaks at one instant |
+
+Following a wrapper chain makes real requests to an ad server, so like
+reading segments and resolving remote Periods it is opt-in.
+
 **Low latency** — parts and chunks change what the numbers mean. A player sits
 about a second behind the edge instead of eighteen, and every ad decision has to
 fit inside that.
@@ -453,7 +474,7 @@ clean run stays silent.
 ## Testing
 
 ```bash
-npm test      # 163 tests across 10 files
+npm test      # 190 tests across 11 files
 ```
 
 - **Spec vectors** — the SCTE-35 decoder is asserted against published ANSI/SCTE

@@ -546,6 +546,7 @@ img { max-width: 100%; }
         <li><a href="#xlink">Remote Periods</a></li>
         <li><a href="#dai">DAI, and the hybrid</a></li>
         <li><a href="#decisioning">Ad decisioning</a></li>
+        <li><a href="#vast">VAST and the creative</a></li>
         <li><a href="#lowlatency">Low latency</a></li>
         <li><a href="#measurement">Measurement</a></li>
         <li><a href="#failure">Where it breaks</a></li>
@@ -1362,8 +1363,82 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 10 -->
 <!-- ============================================================= 11 -->
-<section id="lowlatency">
+<section id="vast">
   <span class="sec-num">11</span>
+  <h2>VAST, and the creative that cannot be stitched</h2>
+
+  <p class="lede">SCTE-35 says an avail exists. VAST says what goes in it. Most of this guide is
+  about the first; this section is about the second, because an avail signalled perfectly and filled
+  with a creative the packager cannot use is still an unfilled avail.</p>
+
+  <p>A <strong>VAST</strong> response is the answer to "what should I play here". It names one or
+  more ads, each with a duration, one or more media files, an impression URL to call when it plays,
+  and tracking URLs for the quartiles. <strong>VMAP</strong> is the schedule that says where the
+  breaks are — the VOD counterpart to a live stream's cues.</p>
+
+  <p>The thing worth understanding is that a VAST response is written for a <em>player</em>, and
+  server-side insertion is not one.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th></th><th>A player can</th><th>A stitcher cannot</th></tr></thead>
+    <tbody>
+      <tr><td>Executable creatives</td><td>Run VPAID JavaScript in its own context</td><td>There is no browser server-side. A VPAID-only response is unfillable.</td></tr>
+      <tr><td>Media selection</td><td>Pick a media file at playback, knowing the device and the bandwidth</td><td>Must choose up front, then splice into an existing ladder.</td></tr>
+      <tr><td>Mismatched encodes</td><td>Tear down and re-initialise its decoder between content and ad</td><td>Can transcode — but only with time the decision budget may not have.</td></tr>
+      <tr><td>Tracking</td><td>Fire beacons from the device, reflecting what really played</td><td>Fires them itself, inferring playback from segment requests.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Wrappers, and why chains cost</h3>
+
+  <p>A VAST response need not contain an ad. It can be a <strong>wrapper</strong>: a redirect to
+  another VAST document, usually because the request passed through a network, an exchange and a
+  demand partner in turn. Each hop is a real HTTP round trip, and they are serial — a client cannot
+  start the next until the last one answers.</p>
+
+  <p>IAB guidance puts the limit at five redirects, and most players stop there. But the limit that
+  bites first is time. If the decision budget is a second — and on a low-latency stream it is — then
+  three hops at two hundred milliseconds each have spent it before anyone has looked at a creative.</p>
+
+  <div class="note">
+    <span class="tag">Where the two halves meet</span>
+    <p>The lead-time problem from earlier and the wrapper-chain problem are the same problem seen
+    from opposite ends. Lead time is how much of a head start the decision gets; the chain is how
+    much of it the decision spends before it starts deciding. A stream can have a generous cue and
+    still under-fill, because four redirects consumed the head start.</p>
+  </div>
+
+  <h3>What goes wrong</h3>
+
+  <ul>
+    <li><strong>An empty response.</strong> No ads at all. This is how "no fill" is expressed and
+    nothing is malformed — the break collapses and content resumes. It is also unsold inventory, and
+    from the manifest it is indistinguishable from a break that was filled correctly.</li>
+    <li><strong>No impression URL.</strong> The ad plays and nothing is counted. This shows up as a
+    discrepancy between avails filled and impressions recorded, and is usually blamed on the player.</li>
+    <li><strong>No Error URL.</strong> The decision service is never told its creative failed. Fill
+    rate looks healthy from the ad server's side while viewers see slate, and the two teams are
+    looking at different numbers that are both correct.</li>
+    <li><strong>A pod that does not fit.</strong> Too long and the last ad is truncated — unbillable
+    — or it runs past the return and cuts programme. Too short and the tail is slate.</li>
+    <li><strong>A creative encoded unlike the programme.</strong> Different codec, or a bitrate above
+    the top rung of a ladder the viewer has never been able to sustain. The first is a decoder reset
+    at both ends of the break; the second is rebuffering in the middle of it.</li>
+    <li><strong>Partial tracking.</strong> Without the full quartile set you cannot tell an ad that
+    ran to the end from one that failed halfway.</li>
+  </ul>
+
+  <p><strong>SpliceCheck</strong> reads a VAST or VMAP document, checks it against what server-side
+  insertion can actually splice, measures the pod against the avail the SCTE-35 asked for, compares
+  the creative's encode with the ladder of a stream you name, and will optionally follow the wrapper
+  chain to report how many hops it takes and how long they cost.</p>
+</section>
+
+<!-- ============================================================= 11 -->
+<section id="lowlatency">
+  <span class="sec-num">12</span>
   <h2>Low latency, and the decision budget</h2>
 
   <p class="lede">Cutting the distance to live from thirty seconds to two does not change what ad
@@ -1465,7 +1540,7 @@ descriptors         1 × avail_descriptor (CUEI)
 </section>
 
 <section id="measurement">
-  <span class="sec-num">12</span>
+  <span class="sec-num">13</span>
   <h2>Measurement, and why it is contested</h2>
 
   <p class="lede">An impression is what gets billed, so the definition of one is a commercial
@@ -1503,7 +1578,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 11 -->
 <section id="failure">
-  <span class="sec-num">13</span>
+  <span class="sec-num">14</span>
   <h2>Where it breaks</h2>
 
   <p class="lede">Almost every failure below leaves the stream playing perfectly. That is the defining
@@ -1542,7 +1617,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 12 -->
 <section id="standards">
-  <span class="sec-num">14</span>
+  <span class="sec-num">15</span>
   <h2>The standards, and who owns them</h2>
 
   <div class="tablewrap">
@@ -1553,7 +1628,7 @@ descriptors         1 × avail_descriptor (CUEI)
         <tr><td>SCTE 104</td><td>SCTE</td><td>Automation to encoder. How a playout system tells the encoder to emit a cue.</td></tr>
         <tr><td>SCTE 224</td><td>SCTE</td><td>Event scheduling and notification. Policy: <em>what should be done</em> at a signal — blackouts, alternate content, audience rules.</td></tr>
         <tr><td>SCTE 130</td><td>SCTE</td><td>Advertising system interfaces — the messaging between placement, decisioning and reporting systems.</td></tr>
-        <tr><td>VAST / VMAP</td><td>IAB Tech Lab</td><td>The ad response and the ad schedule.</td></tr>
+        <tr><td>VAST / VMAP</td><td>IAB Tech Lab</td><td>The ad response and the ad schedule. VAST 4.x adds universal ad IDs and separates the media from the verification.</td></tr>
         <tr><td>OMID</td><td>IAB Tech Lab</td><td>Open Measurement — third-party viewability verification inside the player.</td></tr>
         <tr><td>RFC 8216</td><td>IETF / Apple</td><td>HLS. Defines <code>EXT-X-DATERANGE</code>, discontinuities, and playlist rules.</td></tr>
         <tr><td>HLS Interstitials</td><td>Apple</td><td>Player-fetched ad assets signalled by a DATERANGE class.</td></tr>
@@ -1569,7 +1644,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 13 -->
 <section id="glossary">
-  <span class="sec-num">15</span>
+  <span class="sec-num">16</span>
   <h2>Glossary</h2>
 
   <dl class="gloss">
