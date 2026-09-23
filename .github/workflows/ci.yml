@@ -56,6 +56,35 @@ jobs:
       - name: CLI passes a well-formed manifest
         run: ./dist/cli.mjs fixtures/samples/multiperiod-dash/manifest.mpd --quiet
 
+      # The README shows real CLI output. It has gone stale before — a test
+      # count, a flag list, an "HLS only" that stopped being true — so the
+      # figures it quotes are checked against what the commands actually print.
+      - name: README's CLI examples still hold
+        run: |
+          set -e
+          ./dist/cli.mjs fixtures/broken.m3u8 --markdown | grep -q "^# Ad signalling report"
+
+          # The verdict the README quotes, from the command it quotes it from.
+          verdict="FAIL  4 errors, 10 warnings, 3 info"
+          ./dist/cli.mjs fixtures/broken.m3u8 --quiet | grep -qF "$verdict"
+          grep -qF "$verdict" README.md
+
+          fill="fill rate 40.0%  48s of 120s signalled across 4 avails"
+          ./dist/cli.mjs compare fixtures/samples/ssai-source/playlist.m3u8 \
+                                 fixtures/samples/ssai-output/playlist.m3u8 > cmp.txt || true
+          grep -qF "$fill" cmp.txt
+          grep -qF "$fill" README.md
+          rm -f cmp.txt
+
+          # Could-not-read must stay distinguishable from found-problems, or a
+          # CDN timeout reads as a stream fault.
+          code=0; ./dist/cli.mjs /nonexistent.m3u8 > /dev/null 2>&1 || code=$?
+          test "$code" -eq 2 || { echo "unreadable input exited $code, expected 2"; exit 1; }
+          code=0; ./dist/cli.mjs fixtures/broken.m3u8 --quiet > /dev/null 2>&1 || code=$?
+          test "$code" -eq 1 || { echo "a manifest with errors exited $code, expected 1"; exit 1; }
+
+          echo "the CLI examples in the README match what the CLI prints"
+
       # The segment fixtures are generated; regenerating them must reproduce
       # exactly what is committed, or the parsers and the generator have drifted.
       - name: Segment fixtures are reproducible

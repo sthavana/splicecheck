@@ -513,36 +513,81 @@ npm test      # 207 tests across 12 files
 
 ## CLI
 
+The same analysis in a terminal or a build pipeline. One bundled file, no
+runtime dependencies beyond Node.
+
 ```bash
-npm run build:cli
-
-./dist/cli.mjs <url|file>                    # analyse a manifest
-./dist/cli.mjs compare <source> <output>     # compare a feed with its stitched output
-
-./dist/cli.mjs <url> --segments 8            # open the segments and read the cues
-./dist/cli.mjs <url> --markdown              # a findings report, for a ticket
-./dist/cli.mjs <url> --json                  # the full analysis, for a pipeline
-./dist/cli.mjs <url> --strict                # exit non-zero on warnings too
+npm run build:cli      # -> dist/cli.mjs
 ```
 
-Takes a URL or a path, so it works against a live origin or a captured manifest.
+### Analysing a stream
 
-| Flag | |
-| --- | --- |
-| `--json` | the full analysis as JSON, for piping |
-| `--strict` | exit non-zero on warnings as well as errors |
-| `--quiet` | findings only, without the explanation of each |
-| `--variants <n>` | maximum HLS renditions to fetch |
-| `--segments [n]` | open n segments and read the SCTE-35 inside them (HLS and DASH) |
-| `--policy <file\|url>` | an SCTE-224 document, checked against the stream's signals |
+Takes a URL or a path, so it works against a live origin or a captured
+manifest, HLS or DASH:
 
-Exit codes make it usable as a gate: **0** no errors, **1** problems found,
-**2** could not analyse the input. CI runs it against the defect fixtures on
-every push and fails if it stops catching them.
+```
+$ ./dist/cli.mjs https://demo.unified-streaming.com/k8s/live/scte35.isml/.m3u8
+
+https://demo.unified-streaming.com/k8s/live/scte35.isml/.m3u8
+  HLS · 4 renditions · 5 ad breaks · 601s window · 31.9% ad load
+
+  ▲ SCTE-35 CRC-32 does not validate SCTE35_CRC_INVALID 1280x720 @ 658kbps ×20
+    The section decodes, but its CRC-32 is wrong (0xe4612424). Strict ad servers
+    and SCTE-35 conformance checkers reject sections with a bad CRC, so this
+    break may be silently ignored even though it looks correct in the manifest.
+  · Break 0 uses splice_immediate_flag SPLICE_IMMEDIATE 1280x720 @ 658kbps ×4
+    The splice_insert has no pre-roll time, so the ad decision server is told to
+    switch now rather than at a known PTS. Fixed-latency ad systems cannot
+    pre-fetch creatives against an immediate splice and will commonly return
+    slate for the first few seconds.
+```
+
+The same finding in four renditions is one finding with a `×4`, not four lines.
+`--quiet` drops the explanations and keeps the verdict:
+
+```
+$ ./dist/cli.mjs fixtures/broken.m3u8 --quiet
+
+fixtures/broken.m3u8
+  HLS · 1 rendition · 3 ad breaks · 76s window · 47.7% ad load
+
+  ✖ Segment longer than EXT-X-TARGETDURATION TARGETDURATION_EXCEEDED broken.m3u8 · line 23
+  ✖ SCTE-35 payload could not be decoded SCTE35_DECODE_FAILED broken.m3u8 · line 37
+  ✖ Return-from-break with no matching break start ORPHAN_CUE_IN broken.m3u8 · line 34
+  ✖ Break 2 is never closed UNCLOSED_BREAK broken.m3u8 · line 37
+  ▲ SCTE-35 CRC-32 does not validate SCTE35_CRC_INVALID broken.m3u8 ×2
+  ▲ EXT-X-DATERANGE "break-2" declares a start 5.5s before where it sits DATERANGE_START_DATE_MISMATCH broken.m3u8 · line 24
+  ▲ Break 0 underruns its signalled duration by 20.4s BREAK_UNDERRUN broken.m3u8 · line 10
+  ▲ Break 0 returns to content without EXT-X-DISCONTINUITY NO_DISCONTINUITY_AT_BREAK_END broken.m3u8 · line 19
+  · Breaks are signalled with more than one tag at the same point DUAL_SIGNALLING broken.m3u8
+
+  FAIL  4 errors, 10 warnings, 3 info
+```
+
+### Reading the segments
+
+`--segments` opens the media and decodes the SCTE-35 carried in it, then checks
+it against the manifest. Works for HLS and DASH:
+
+```
+$ ./dist/cli.mjs https://demo.unified-streaming.com/k8s/live/scte35.isml/.m3u8 --segments 4
+
+  segments: 4/4 read · 0.59MB · mpeg-ts · 2 inband cues
+  ▲ Inband SCTE-35 CRC-32 does not validate INBAND_SCTE35_CRC_INVALID 1280x720 @ 658kbps ×2
+```
+
+That pair of findings is the argument for the feature: the manifest carries a
+bad CRC and so does the media underneath it, which places the fault at the
+encoder rather than at the packager that transcribed it.
+
+### Comparing a feed with its stitched output
 
 ```
 $ ./dist/cli.mjs compare fixtures/samples/ssai-source/playlist.m3u8 \
                          fixtures/samples/ssai-output/playlist.m3u8
+
+source fixtures/samples/ssai-source/playlist.m3u8
+output fixtures/samples/ssai-output/playlist.m3u8
 
   fill rate 40.0%  48s of 120s signalled across 4 avails
 
@@ -551,8 +596,74 @@ $ ./dist/cli.mjs compare fixtures/samples/ssai-source/playlist.m3u8 \
   12:01:30  signalled     30s  output     30s  passthrough
   12:02:06  signalled     30s  output      —s  not-stitched
 
+  ✖ Avail 2 exists in the output but nothing was substituted into it AVAIL_PASSED_THROUGH
+  ✖ Avail 3 was signalled but never appears in the output AVAIL_NOT_STITCHED
+  ▲ Avail 1 is 12s short of the 30s that was signalled AVAIL_UNDER_FILLED
+
   FAIL  2 errors, 2 warnings, 0 info
 ```
+
+### A report you can send someone
+
+`--markdown` produces the same report the web tool copies, which states what was
+checked as well as what was found:
+
+```
+$ ./dist/cli.mjs fixtures/broken.m3u8 --markdown
+
+# Ad signalling report
+
+**Source:** `fixtures/broken.m3u8`
+**Taken:** 2026-09-22 12:28:58Z
+**Verdict:** FAIL — 4 error(s), 10 warning(s), 3 note(s)
+
+## What was checked
+
+- 1 rendition(s), HLS
+- 3 ad break(s) reconstructed
+- 12 segment(s) spanning 75.5s (on demand)
+- Segments were not opened, so only the manifest was checked
+
+## Errors (4)
+...
+```
+
+`--json` emits the full analysis instead, for something downstream to parse.
+
+### In a build pipeline
+
+Exit codes are the point:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | No errors — and no warnings either, under `--strict` |
+| `1` | Problems found |
+| `2` | Could not analyse the input at all |
+
+The distinction between 1 and 2 matters: a CDN timeout is not a stream fault,
+and a pipeline that treats them alike will either page somebody at 3am for a
+network blip or swallow a real defect.
+
+```yaml
+- name: Ad signalling must be clean
+  run: ./dist/cli.mjs "$STREAM_URL" --strict --quiet
+```
+
+Comparing a source against itself exits `1`, which is correct rather than a
+quirk: if the output is identical to the input then nothing was substituted,
+and that is a pipeline that did not run.
+
+### Every flag
+
+| Flag | |
+| --- | --- |
+| `--json` | the full analysis as JSON, for piping |
+| `--markdown` | a findings report as Markdown, for a ticket |
+| `--strict` | exit non-zero on warnings as well as errors |
+| `--quiet` | findings only, without the explanation of each |
+| `--variants <n>` | maximum HLS renditions to fetch (default 6) |
+| `--segments [n]` | open n segments and read the SCTE-35 inside them (default 8) |
+| `--policy <file\|url>` | an SCTE-224 document, checked against the stream's signals |
 
 ## Architecture
 
