@@ -5,20 +5,13 @@
 **Ad signalling in HLS and DASH, end to end.** Point it at a live stream and it
 reconstructs every ad break, decodes the SCTE-35 riding with it, reads the cues
 carried in the segments underneath, and reports the conditions that make
-server-side ad insertion mis-fire. Compare the feed going into an ad-insertion
-service with the output coming out. Watch a stream continuously and be told when
-any of that changes. Or build a stream through the whole chain and break it on
-purpose, to see what the rules catch.
+server-side ad insertion mis-fire. It also reads the hop above — the SCTE-104
+that automation sent the encoder — and the one to the side, the VAST response
+meant to fill the break. Compare a feed with the stitched output coming out of
+an ad service, watch a stream continuously, or build one through the whole
+chain and break it on purpose to see what the rules catch.
 
-**Live demo: [splicecheck.vercel.app](https://splicecheck.vercel.app)** ·
-**Reference: [how ad insertion works](https://splicecheck.vercel.app/guide)** ·
-**Write-up: [fifty-five alerts and nothing wrong](https://splicecheck.vercel.app/notes/fifty-five-alerts)** ·
-**Reference: [the ad response](https://splicecheck.vercel.app/ad-response)** ·
-**Reference: [how a stream gets to a viewer](https://splicecheck.vercel.app/streaming)** ·
-**Reference: [where video and ad tech talk past each other](https://splicecheck.vercel.app/faq)**
-
-The interface follows the viewer's colour theme, and can be set to light or dark
-explicitly.
+### Live at **[splicecheck.vercel.app](https://splicecheck.vercel.app)**
 
 Six tools, a CLI, and a report you can send someone:
 
@@ -38,6 +31,21 @@ Six tools, a CLI, and a report you can send someone:
 - **Reports** — any result copies or downloads as Markdown for a ticket, or as
   JSON for a pipeline
 - **CLI** — the same analysis in a terminal or a build pipeline
+
+And four pieces of writing, if you would rather read than click:
+
+- [**How ad insertion works**](https://splicecheck.vercel.app/guide) — the
+  subject from the ground up, in seventeen sections
+- [**The ad response**](https://splicecheck.vercel.app/ad-response) — VAST and
+  VMAP in depth, and what changes when a stitcher rather than a browser is
+  reading them
+- [**How a stream gets to a viewer**](https://splicecheck.vercel.app/streaming)
+  — the delivery chain, for anyone arriving from the advertising side
+- [**Where video and ad tech talk past each other**](https://splicecheck.vercel.app/faq)
+  — the recurring misunderstandings between the two disciplines
+
+And one write-up of something that happened while building it:
+[**fifty-five alerts and nothing wrong**](https://splicecheck.vercel.app/notes/fifty-five-alerts).
 
 > The hosted demo runs the inspector and the comparison in full. Continuous
 > monitoring needs a process alive between requests and a disk that survives it,
@@ -308,6 +316,19 @@ they share: `VARIANT_BREAK_COUNT_MISMATCH`, `VARIANT_MISSING_BREAK`,
 | `EVENT_MISSING_ID` / `EVENT_AMBIGUOUS_TIME` | Events a refreshing client can't deduplicate or order |
 | `EMPTY_PERIOD` | An avail was opened and never filled — what a failed ad decision looks like |
 | `MUP_LONGER_THAN_SHORTEST_BREAK` | An avail can begin and end between two MPD refreshes and never be seen |
+
+**HLS Interstitials** — Apple's alternative to splicing: the break is named in
+the manifest and the player fetches the asset itself, so the timeline is never
+rewritten. Different mechanism, different failures.
+
+| Code | What it catches |
+| --- | --- |
+| `INTERSTITIAL_NO_ASSET` | The interruption names nothing to play — neither `X-ASSET-URI` nor `X-ASSET-LIST` |
+| `INTERSTITIAL_AMBIGUOUS_ASSET` | Both named at once, and players differ on which wins |
+| `INTERSTITIAL_UNBOUNDED` | No duration, no resume offset and no playout limit, so nothing says when content comes back |
+| `INTERSTITIAL_OVERLAP` | Two interruptions covering the same instant; a player can only be in one |
+| `INTERSTITIAL_PRE_AND_POST` | One DATERANGE claiming to be both a pre-roll and a post-roll |
+| `INTERSTITIAL_UNKNOWN_ATTRIBUTE_VALUE` | An `X-SNAP` or `X-RESTRICT` value outside the defined set, which players ignore silently |
 
 **Remote Periods (DASH xlink)** — the mechanism multi-period DASH actually uses
 for server-side insertion: the packager reserves the hole and names a service
