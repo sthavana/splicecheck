@@ -20,9 +20,11 @@ purpose, to see what the rules catch.
 The interface follows the viewer's colour theme, and can be set to light or dark
 explicitly.
 
-Five tools, a CLI, and a report you can send someone:
+Six tools, a CLI, and a report you can send someone:
 
 - **Inspector** (`/`) — a one-off look at any stream
+- **SCTE-104** (`/scte104`) — the message automation sent the encoder, decoded
+  and checked against the SCTE-35 the stream actually carries
 - **Pipeline comparison** (`/compare`) — the feed going *into* an ad-insertion
   service against the stitched output coming *out* of it, to see which avails
   were actually filled
@@ -345,6 +347,20 @@ actually be stitched. SCTE-35 says an avail exists; this is what goes in it.
 Following a wrapper chain makes real requests to an ad server, so like
 reading segments and resolving remote Periods it is opt-in.
 
+**SCTE-104** — the message playout automation sends the encoder, which is the
+first transcription in the chain and the only one nobody downstream can see.
+Decoded from a capture, a debug log or an automation trace, then compared
+against the `splice_info_section` the encoder actually emitted.
+
+| Code | What it catches |
+| --- | --- |
+| `S104_SHORT_PRE_ROLL` / `S104_IMMEDIATE_SPLICE` | The lead-time problem at its source: under about four seconds, an ad decision cannot complete before the splice point |
+| `S104_NO_BREAK_DURATION` | Nothing tells the encoder how long the avail runs, so nothing downstream can be told how much to fill |
+| `S104_EVENT_ID_CHANGED` | The id changed at the encoder, so the automation's record and the stream's cannot be reconciled |
+| `S104_DURATION_CHANGED` | The avail the automation scheduled is not the one the stream advertises — every break is wrong by the same amount |
+| `S104_DIRECTION_CHANGED` | A break start emitted as a return, or the reverse |
+| `S104_FORM_CHANGED` | `splice_insert` converted to `time_signal` — usually deliberate, and worth seeing because the two pair differently downstream |
+
 **Low latency** — parts and chunks change what the numbers mean. A player sits
 about a second behind the edge instead of eighteen, and every ad decision has to
 fit inside that.
@@ -485,7 +501,7 @@ clean run stays silent.
 ## Testing
 
 ```bash
-npm test      # 207 tests across 12 files
+npm test      # 222 tests across 13 files
 ```
 
 - **Spec vectors** — the SCTE-35 decoder is asserted against published ANSI/SCTE
@@ -664,6 +680,7 @@ and that is a pipeline that did not run.
 | `--variants <n>` | maximum HLS renditions to fetch (default 6) |
 | `--segments [n]` | open n segments and read the SCTE-35 inside them (default 8) |
 | `--policy <file\|url>` | an SCTE-224 document, checked against the stream's signals |
+| `--scte104 <hex\|file>` | the SCTE-104 message automation sent, compared with what the stream carries |
 
 ## Architecture
 
@@ -717,7 +734,6 @@ coverage beside the interval so a sparse night cannot read as a quiet one.
 - Per-creative breakdown inside a filled avail — which creatives ran, and
   whether the pod was assembled as the ad server intended
 - Reading segments during a monitor poll, rather than only on demand
-- SCTE-104, the upstream contribution-side form of the same signalling
 
 ## Licence
 

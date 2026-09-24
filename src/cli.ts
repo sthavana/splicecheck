@@ -13,6 +13,7 @@ import { analysisToMarkdown, comparisonToMarkdown } from "./lib/report";
 import { comparePipeline } from "./lib/pipeline";
 import { probeMpd, probeRendition, type SegmentProbe } from "./lib/segments";
 import { compareScte224, isScte224, parseScte224, type Scte224Comparison } from "./lib/scte224";
+import { analyzeScte104, compareScte104ToScte35, parseScte104 } from "./lib/scte104";
 import type { Finding } from "./lib/analyze";
 
 const useColour =
@@ -35,6 +36,7 @@ const SEV = {
 interface Options {
   json: boolean;
   markdown: boolean;
+  scte104?: string;
   strict: boolean;
   quiet: boolean;
   variants?: number;
@@ -54,6 +56,8 @@ Usage
 Options
   --json             emit the full analysis as JSON
   --markdown         emit a findings report as Markdown, for a ticket
+  --scte104 <hex>    the SCTE-104 automation sent the encoder, checked against
+                     the SCTE-35 the stream actually carries
   --strict           exit non-zero on warnings as well as errors
   --quiet            print findings only, no summary detail
   --variants <n>     maximum HLS renditions to fetch (default 6)
@@ -81,6 +85,7 @@ function parseArgs(argv: string[]): { cmd: string; targets: string[]; opts: Opti
     if (a === "-h" || a === "--help") usage();
     else if (a === "--json") opts.json = true;
     else if (a === "--markdown" || a === "--md") opts.markdown = true;
+    else if (a === "--scte104") opts.scte104 = argv[++i];
     else if (a === "--strict") opts.strict = true;
     else if (a === "--quiet") opts.quiet = true;
     else if (a === "--variants") opts.variants = Number(argv[++i]);
@@ -224,10 +229,27 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
     policy = compareScte224(parseScte224(xml), first.breaks, { label: first.label });
   }
 
+  // The first transcription in the chain: what automation asked for, against
+  // what the encoder actually emitted.
+  let upstream: { findings: Finding[]; checked: { field: string; requested: string; emitted: string; agrees: boolean }[] } | undefined;
+  if (opts.scte104 && first) {
+    const raw = /^[0-9a-fA-FxX\s:,-]+$/.test(opts.scte104) && opts.scte104.length > 24
+      ? opts.scte104
+      : await readFile(opts.scte104, "utf8");
+    const msg = parseScte104(raw);
+    const own = analyzeScte104(msg);
+    const section = first.breaks.find((b) => b.signal?.section)?.signal?.section;
+    if (!section) {
+      throw new Error("The stream carries no decodable SCTE-35 to compare the message against");
+    }
+    const cmp = compareScte104ToScte35(msg, section);
+    upstream = { findings: [...own, ...cmp.findings], checked: cmp.checked };
+  }
+
   if (opts.markdown) {
     process.stdout.write(analysisToMarkdown({ ...r, probe }) + "\n");
   } else if (opts.json) {
-    process.stdout.write(JSON.stringify({ ...r, raw: undefined, probe, policy }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ ...r, raw: undefined, probe, policy, upstream }, null, 2) + "\n");
   } else {
     const first = r.renditions[0];
     process.stdout.write(`\n${c.bold(r.sourceUri)}\n`);
@@ -239,6 +261,16 @@ async function runAnalyse(target: string, opts: Options): Promise<number> {
       ),
     );
     if (probe) printProbe(probe);
+    if (upstream) {
+      process.stdout.write(c.dim("  SCTE-104 against the emitted SCTE-35:\n"));
+      for (const k of upstream.checked) {
+        process.stdout.write(
+          `    ${k.agrees ? c.dim("·") : c.red("✖")} ${k.field.padEnd(22)} ` +
+            c.dim(`asked ${k.requested.padEnd(10)} emitted ${k.emitted}`) + "\n",
+        );
+      }
+      process.stdout.write("\n");
+    }
     if (policy) printPolicy(policy);
     const all = [
       ...r.crossFindings,

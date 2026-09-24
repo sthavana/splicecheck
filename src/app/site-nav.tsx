@@ -23,6 +23,7 @@ const GROUPS: Group[] = [
     note: "Point it at a live stream",
     items: [
       { href: "/", label: "Inspector" },
+      { href: "/scte104", label: "SCTE-104" },
       { href: "/compare", label: "Pipeline comparison" },
       { href: "/monitors", label: "Monitors" },
       { href: "/vast", label: "Ad response" },

@@ -510,11 +510,13 @@ img { max-width: 100%; }
 
 
 
+
     <div class="site-nav-group">
       <h2>Tool</h2>
       <p class="site-nav-note">Point it at a live stream</p>
       <ul>
         <li><a href="/">Inspector</a></li>
+        <li><a href="/scte104">SCTE-104</a></li>
         <li><a href="/compare">Pipeline comparison</a></li>
         <li><a href="/monitors">Monitors</a></li>
         <li><a href="/vast">Ad response</a></li>
@@ -547,6 +549,7 @@ img { max-width: 100%; }
         <li><a href="#chain">The chain, end to end</a></li>
         <li><a href="#scte35">SCTE-35, in detail</a></li>
         <li><a href="#carriage">How the cue travels</a></li>
+        <li><a href="#scte104">SCTE-104, upstream</a></li>
         <li><a href="#csai">Client-side insertion</a></li>
         <li><a href="#ssai">Server-side insertion</a></li>
         <li><a href="#xlink">Remote Periods</a></li>
@@ -946,8 +949,86 @@ descriptors         1 × avail_descriptor (CUEI)
 </section>
 
 <!-- ============================================================= 6 -->
-<section id="csai">
+<!-- ============================================================= 06 -->
+<section id="scte104">
   <span class="sec-num">06</span>
+  <h2>SCTE-104, before any of this is SCTE-35</h2>
+
+  <p class="lede">The chain starts one hop earlier than most of this guide. Playout automation does
+  not emit SCTE-35 — it emits SCTE-104, and the encoder turns one into the other.</p>
+
+  <p><strong>SCTE-104</strong> is a message protocol over TCP between an automation system and an
+  encoder. Automation opens a session and sends operations; the encoder converts them into
+  <code>splice_info_section</code>s and inserts them into the transport stream. Everything else in
+  this guide describes what happens after that conversion.</p>
+
+  <p>The message that matters most is <code>splice_request_data</code>:</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Field</th><th>What it says</th></tr></thead>
+    <tbody>
+      <tr><td><code>splice_insert_type</code></td><td>Start or end of a break, normal or immediate</td></tr>
+      <tr><td><code>splice_event_id</code></td><td>The id everything downstream pairs and reconciles on</td></tr>
+      <tr><td><code>pre_roll_time</code></td><td>Milliseconds from now until the splice point</td></tr>
+      <tr><td><code>break_duration</code></td><td>Tenths of a second — how long the avail runs</td></tr>
+      <tr><td><code>auto_return_flag</code></td><td>Whether the duration closes the break by itself</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="tag">Where lead time comes from</span>
+    <p><code>pre_roll_time</code> is the origin of the lead-time problem that appears everywhere else
+    in this guide. It is the entire warning the rest of the chain gets: the encoder inserts the cue,
+    the packager transcribes it, the ad decision service reads it and has to return creatives before
+    the splice point arrives. Under about four seconds, fill rates fall sharply — and the symptom
+    appears at the far end of the chain, as an avail that did not fill.</p>
+    <p><code>spliceStart_immediate</code> is the same problem in its strongest form: no pre-roll at
+    all. Everything downstream learns of the break at the moment it begins.</p>
+  </div>
+
+  <h3>The first transcription, and the only invisible one</h3>
+
+  <p>The encoder is handed an operation and emits a section. Those are two separate artefacts,
+  produced by different vendors' software, describing the same event — and nothing in the delivery
+  path compares them. It is the same shape as the manifest-against-segments problem later in this
+  guide, one hop further upstream, and it is harder to see because the SCTE-104 side never leaves the
+  broadcast centre.</p>
+
+  <p>What goes wrong there:</p>
+
+  <ul>
+    <li><strong>The event id changes.</strong> Downstream systems pair a break start with its end on
+    that id, deduplicate on it, and reconcile reports against schedules with it. Changed at the
+    encoder, the automation's record and the stream's record cannot be lined up at all.</li>
+    <li><strong>The duration changes.</strong> Ad decisioning fills to the figure in the SCTE-35;
+    the schedule was built against the figure in the SCTE-104. Every break is then the wrong length
+    by the same amount, consistently, which makes it look like a decisioning fault.</li>
+    <li><strong>The direction changes.</strong> A break start emitted as a return, or the reverse.
+    The avail state machine downstream is wrong from that point on.</li>
+    <li><strong>The form changes.</strong> Many encoders are configured to convert a
+    <code>splice_insert</code> request into a <code>time_signal</code> with segmentation descriptors,
+    which carries more information. That is deliberate and usually correct — but the two forms pair
+    differently downstream, and a receiver expecting one may not act on the other.</li>
+  </ul>
+
+  <div class="note fail">
+    <span class="tag">Why this hop is worth checking</span>
+    <p>Everything downstream of the encoder can be inspected by anyone with the stream URL. This hop
+    cannot: it is a TCP session inside a broadcast centre, and by the time a fault reaches anybody
+    who can see a manifest, it has been converted into something that looks like a packaging
+    problem. The automation team's logs say the break was scheduled correctly. The packaging team's
+    manifest says it was transcribed correctly. Both are true.</p>
+  </div>
+
+  <p><strong>SpliceCheck</strong> decodes an SCTE-104 message from a capture, a debug log or an
+  automation trace, checks the request on its own terms, and compares it field by field against the
+  <code>splice_info_section</code> the stream actually carries.</p>
+</section>
+
+<section id="csai">
+  <span class="sec-num">07</span>
   <h2>Client-side ad insertion</h2>
 
   <p class="lede">The player does the work. It sees the break coming, pauses the content, asks an ad
@@ -1043,7 +1124,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 7 -->
 <section id="ssai">
-  <span class="sec-num">07</span>
+  <span class="sec-num">08</span>
   <h2>Server-side ad insertion</h2>
 
   <p class="lede">A service between the origin and the player rewrites the manifest so the ad segments
@@ -1152,7 +1233,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 8 -->
 <section id="xlink">
-  <span class="sec-num">08</span>
+  <span class="sec-num">09</span>
   <h2>Remote Periods, and the hole in the timeline</h2>
 
   <p class="lede">In multi-period DASH the ad break is its own Period — and the packager often does
@@ -1258,7 +1339,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 9 -->
 <section id="dai">
-  <span class="sec-num">09</span>
+  <span class="sec-num">10</span>
   <h2>DAI, and why the terms blur</h2>
 
   <p class="lede"><strong>Dynamic Ad Insertion</strong> is the umbrella: any system that decides at
@@ -1307,7 +1388,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 9 -->
 <section id="decisioning">
-  <span class="sec-num">10</span>
+  <span class="sec-num">11</span>
   <h2>Ad decisioning</h2>
 
   <p class="lede">The signalling says an avail exists. Decisioning decides what goes in it — and that
@@ -1366,7 +1447,7 @@ descriptors         1 × avail_descriptor (CUEI)
 <!-- ============================================================= 10 -->
 <!-- ============================================================= 11 -->
 <section id="vast">
-  <span class="sec-num">11</span>
+  <span class="sec-num">12</span>
   <h2>VAST, and the creative that cannot be stitched</h2>
 
   <p class="lede">SCTE-35 says an avail exists. VAST says what goes in it. Most of this guide is
@@ -1456,7 +1537,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 11 -->
 <section id="lowlatency">
-  <span class="sec-num">12</span>
+  <span class="sec-num">13</span>
   <h2>Low latency, and the decision budget</h2>
 
   <p class="lede">Cutting the distance to live from thirty seconds to two does not change what ad
@@ -1558,7 +1639,7 @@ descriptors         1 × avail_descriptor (CUEI)
 </section>
 
 <section id="measurement">
-  <span class="sec-num">13</span>
+  <span class="sec-num">14</span>
   <h2>Measurement, and why it is contested</h2>
 
   <p class="lede">An impression is what gets billed, so the definition of one is a commercial
@@ -1596,7 +1677,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 11 -->
 <section id="failure">
-  <span class="sec-num">14</span>
+  <span class="sec-num">15</span>
   <h2>Where it breaks</h2>
 
   <p class="lede">Almost every failure below leaves the stream playing perfectly. That is the defining
@@ -1635,7 +1716,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 12 -->
 <section id="standards">
-  <span class="sec-num">15</span>
+  <span class="sec-num">16</span>
   <h2>The standards, and who owns them</h2>
 
   <div class="tablewrap">
@@ -1643,7 +1724,7 @@ descriptors         1 × avail_descriptor (CUEI)
       <thead><tr><th>Standard</th><th>Body</th><th>What it covers</th></tr></thead>
       <tbody>
         <tr><td>SCTE 35</td><td>SCTE</td><td>The <code>splice_info_section</code> — the cue itself, its commands and descriptors.</td></tr>
-        <tr><td>SCTE 104</td><td>SCTE</td><td>Automation to encoder. How a playout system tells the encoder to emit a cue.</td></tr>
+        <tr><td>SCTE 104</td><td>SCTE</td><td>Automation to encoder — how a playout system tells the encoder to emit a cue. Covered in <a href="#scte104">section 06</a>.</td></tr>
         <tr><td>SCTE 224</td><td>SCTE</td><td>Event scheduling and notification. Policy: <em>what should be done</em> at a signal — blackouts, alternate content, audience rules.</td></tr>
         <tr><td>SCTE 130</td><td>SCTE</td><td>Advertising system interfaces — the messaging between placement, decisioning and reporting systems.</td></tr>
         <tr><td>VAST / VMAP</td><td>IAB Tech Lab</td><td>The ad response and the ad schedule. VAST 4.x adds universal ad IDs and separates the media from the verification.</td></tr>
@@ -1662,7 +1743,7 @@ descriptors         1 × avail_descriptor (CUEI)
 
 <!-- ============================================================= 13 -->
 <section id="glossary">
-  <span class="sec-num">16</span>
+  <span class="sec-num">17</span>
   <h2>Glossary</h2>
 
   <dl class="gloss">

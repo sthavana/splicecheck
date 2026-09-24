@@ -66,6 +66,7 @@ const NAV_GROUPS: { title: string; note: string; items: [string, string][] }[] =
     note: "Point it at a live stream",
     items: [
       ["/", "Inspector"],
+      ["/scte104", "SCTE-104"],
       ["/compare", "Pipeline comparison"],
       ["/monitors", "Monitors"],
       ["/vast", "Ad response"],
