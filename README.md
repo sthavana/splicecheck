@@ -705,26 +705,65 @@ and that is a pipeline that did not run.
 
 ## Architecture
 
+Reading the chain, in the order a cue travels it:
+
 ```
-src/lib/scte35.ts      splice_info_section decoder (no dependencies)
-src/lib/hls.ts         HLS playlist parser
-src/lib/dash.ts        MPD parser — multi-period, EventStream, SegmentTimeline
-src/lib/analyze.ts     HLS break reconstruction + rules + cross-rendition
-src/lib/analyzeDash.ts DASH period analysis + rules
-src/lib/runner.ts      one analysis path, with the fetcher injected
-src/lib/pipeline.ts    source vs stitched-output comparison
-src/lib/monitor.ts     polling, transition diffing, alert delivery
-src/lib/store.ts       SQLite state
+src/lib/scte104.ts     automation to encoder — the hop above everything else
+src/lib/scte35.ts      splice_info_section decoder, and UPID validation
+src/lib/hls.ts         HLS playlist parser, including the low-latency tags
+src/lib/dash.ts        MPD parser — periods, EventStream, SegmentTimeline, xlink
 src/lib/mp4.ts         ISO BMFF box walking and emsg extraction
 src/lib/ts.ts          MPEG-TS: PAT, PMT, cue sections, ID3-in-PES
 src/lib/segments.ts    reads segments and checks them against the manifest
+src/lib/xlink.ts       resolves the remote Periods a manifest leaves for an ad service
+src/lib/vast.ts        VAST and VMAP, wrapper chains, and what a stitcher can splice
+```
+
+Judging what it found:
+
+```
+src/lib/analyze.ts     HLS break reconstruction + rules + cross-rendition
+src/lib/analyzeDash.ts DASH period analysis + rules
+src/lib/pipeline.ts    source vs stitched-output comparison
 src/lib/scte224.ts     policy documents, lined up against the stream's signals
+src/lib/runner.ts      one analysis path, with the fetcher injected
+src/lib/report.ts      the Markdown and JSON a finding leaves the screen as
+```
+
+Watching it over time:
+
+```
+src/lib/monitor.ts     polling, transition diffing, coverage, alert delivery
+src/lib/store.ts       SQLite state
+src/lib/samples.ts     recorded bundles, so an analysis is reproducible
+```
+
+Writing a stream rather than reading one — the simulator is the inverse of
+everything above, and the only part of the project that produces signalling
+instead of judging it:
+
+```
+src/lib/sim/scte35Encode.ts  the decoder's inverse; round-tripped in the tests
+src/lib/sim/timeline.ts      the channel: programme, avails, and what is signalled
+src/lib/sim/packager.ts      HLS, with the marker conventions and the parts
+src/lib/sim/dashPackager.ts  MPD, multi-period or EventStream, with xlink
+src/lib/sim/origin.ts        the sliding window, its depth, and its stalls
+src/lib/sim/decision.ts      the ad decision: a VAST response, and what survives it
+src/lib/sim/ssai.ts          stitching, and the ways it goes wrong
+src/lib/sim/csai.ts          the client-side path, where the manifest is untouched
+src/lib/sim/chain.ts         runs the stages and hands the output to the analyser
+```
+
+```
 src/cli.ts             terminal interface over the same analysis
 ```
 
 The fetcher is injected, so the identical analysis runs against the network, a
 recorded bundle, or a test fixture. The monitor calls the same `analyzeUrl` the
-API does.
+API does. And the simulator's output goes through that same path — a fault it
+injects has to be caught by the rules without either side knowing about the
+other, which is what makes the rules testable against streams whose ground truth
+is known.
 
 ### Running the monitor
 
